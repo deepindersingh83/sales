@@ -2,8 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\DisputeStatus;
+use App\Enums\PayoutStatus;
+use App\Models\CalcRun;
 use App\Models\Credit;
+use App\Models\Dispute;
+use App\Models\Plan;
 use App\Models\Reward;
+use App\Models\Transaction;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
@@ -23,7 +29,16 @@ class DashboardController extends Controller
             return $this->participantDashboard($user->id);
         }
 
-        return view('dashboard', ['role' => $role]);
+        return view('dashboard', [
+            'role' => $role,
+            'stats' => [
+                'plans' => Plan::count(),
+                'transactions' => Transaction::count(),
+                'pendingCredits' => Credit::where('status', PayoutStatus::Pending)->count(),
+                'openDisputes' => Dispute::where('status', '!=', DisputeStatus::Resolved)->count(),
+            ],
+            'recentRuns' => CalcRun::with('plan')->latest()->take(5)->get(),
+        ]);
     }
 
     protected function participantDashboard(int $userId): View
