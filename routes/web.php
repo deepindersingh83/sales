@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Admin\AliasController;
 use App\Http\Controllers\Admin\CalcRunController;
+use App\Http\Controllers\Admin\CalcRunReleaseController;
 use App\Http\Controllers\Admin\PlanController;
 use App\Http\Controllers\Admin\TransactionController;
 use App\Http\Controllers\Admin\TransactionImportController;
@@ -44,6 +45,12 @@ Route::middleware(['auth', 'workspace.admin'])
         Route::post('plans/{plan}/calc-runs', [CalcRunController::class, 'store'])->name('plans.calc-runs.store');
         Route::get('calc-runs/{calcRun}', [CalcRunController::class, 'show'])->name('calc-runs.show');
         Route::get('calc-runs/{calcRun}/status', [CalcRunController::class, 'status'])->name('calc-runs.status');
+
+        // Two-stage review/release pipeline for a run's credits and rewards.
+        Route::get('calc-runs/{calcRun}/credits', [CalcRunReleaseController::class, 'credits'])->name('calc-runs.credits.index');
+        Route::post('calc-runs/{calcRun}/credits/transition', [CalcRunReleaseController::class, 'transitionCredits'])->name('calc-runs.credits.transition');
+        Route::get('calc-runs/{calcRun}/rewards', [CalcRunReleaseController::class, 'rewards'])->name('calc-runs.rewards.index');
+        Route::post('calc-runs/{calcRun}/rewards/transition', [CalcRunReleaseController::class, 'transitionRewards'])->name('calc-runs.rewards.transition');
     });
 
 require __DIR__.'/auth.php';
