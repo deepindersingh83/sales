@@ -19,6 +19,12 @@
                         <x-nav-link :href="route('admin.plans.index')" :active="request()->routeIs('admin.plans.*')">
                             {{ __('Plans') }}
                         </x-nav-link>
+                        <x-nav-link :href="route('admin.transactions.index')" :active="request()->routeIs('admin.transactions.*') || request()->routeIs('admin.imports.*')">
+                            {{ __('Transactions') }}
+                        </x-nav-link>
+                        <x-nav-link :href="route('admin.aliases.index')" :active="request()->routeIs('admin.aliases.*')">
+                            {{ __('Aliases') }}
+                        </x-nav-link>
                     @endif
                 </div>
             </div>
