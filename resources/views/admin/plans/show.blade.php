@@ -11,6 +11,9 @@
                         </button>
                     </form>
                 @endcan
+                @can('manageAccess', $plan)
+                    <a href="{{ route('admin.plans.access.edit', $plan) }}" class="text-sm text-slate-600 hover:text-slate-900">Manage access</a>
+                @endcan
                 @can('update', $plan)
                     <a href="{{ route('admin.plans.edit', $plan) }}" class="text-sm text-indigo-600 hover:text-indigo-900">Edit</a>
                 @endcan

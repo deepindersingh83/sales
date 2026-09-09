@@ -4,6 +4,8 @@ use App\Http\Controllers\Admin\AliasController;
 use App\Http\Controllers\Admin\CalcRunController;
 use App\Http\Controllers\Admin\CalcRunReleaseController;
 use App\Http\Controllers\Admin\DisputeQueueController;
+use App\Http\Controllers\Admin\MemberController;
+use App\Http\Controllers\Admin\PlanAccessController;
 use App\Http\Controllers\Admin\PlanController;
 use App\Http\Controllers\Admin\ReportController;
 use App\Http\Controllers\Admin\TransactionController;
@@ -11,6 +13,7 @@ use App\Http\Controllers\Admin\TransactionImportController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DisputeController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\WorkspaceController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -34,6 +37,11 @@ Route::middleware('auth')->group(function () {
     Route::get('/disputes/{dispute}', [DisputeController::class, 'show'])->name('disputes.show');
     Route::post('/disputes/{dispute}/comments', [DisputeController::class, 'storeComment'])->name('disputes.comments.store');
     Route::patch('/disputes/{dispute}/resolve', [DisputeController::class, 'resolve'])->name('disputes.resolve');
+
+    // Multi-company: switch between workspaces / create a new one.
+    Route::post('/workspaces/{workspace}/switch', [WorkspaceController::class, 'switch'])->name('workspaces.switch');
+    Route::get('/workspaces/create', [WorkspaceController::class, 'create'])->name('workspaces.create');
+    Route::post('/workspaces', [WorkspaceController::class, 'store'])->name('workspaces.store');
 });
 
 // Admin area — any workspace role except Participant. Per-record authorization
@@ -43,6 +51,16 @@ Route::middleware(['auth', 'workspace.admin'])
     ->name('admin.')
     ->group(function () {
         Route::resource('plans', PlanController::class);
+
+        // Per-plan access management (Full Admin).
+        Route::get('plans/{plan}/access', [PlanAccessController::class, 'edit'])->name('plans.access.edit');
+        Route::put('plans/{plan}/access', [PlanAccessController::class, 'update'])->name('plans.access.update');
+
+        // Team / member + role management (Full Admin).
+        Route::get('members', [MemberController::class, 'index'])->name('members.index');
+        Route::post('members', [MemberController::class, 'store'])->name('members.store');
+        Route::put('members/{member}', [MemberController::class, 'update'])->name('members.update');
+        Route::delete('members/{member}', [MemberController::class, 'destroy'])->name('members.destroy');
 
         // Transactions + CSV import.
         Route::get('transactions', [TransactionController::class, 'index'])->name('transactions.index');

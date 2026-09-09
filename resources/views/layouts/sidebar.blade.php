@@ -2,7 +2,9 @@
     $user = auth()->user();
     $role = $user?->currentRole();
     $isAdmin = $role?->isAdmin() ?? false;
+    $isFullAdmin = $role === \App\Enums\Role::FullAdmin;
     $workspace = app(\App\Support\WorkspaceContext::class)->get();
+    $myWorkspaces = $user?->workspaces()->orderBy('name')->get() ?? collect();
 
     // Inline icon set (Heroicons outline, 20px).
     $ico = [
@@ -23,11 +25,28 @@
     <span class="font-semibold text-slate-800 truncate">{{ config('app.name', 'Commission') }}</span>
 </div>
 
-{{-- Workspace --}}
+{{-- Workspace switcher --}}
 @if ($workspace)
-    <div class="px-5 py-3 border-b border-slate-100">
-        <div class="text-[11px] uppercase tracking-wide text-slate-400">Workspace</div>
-        <div class="text-sm font-medium text-slate-700 truncate">{{ $workspace->name }}</div>
+    <div class="px-3 py-3 border-b border-slate-100" x-data="{ open: false }">
+        <button @click="open = !open" class="w-full flex items-center justify-between gap-2 rounded-lg px-2 py-2 hover:bg-slate-100 transition">
+            <span class="min-w-0 text-left">
+                <span class="block text-[11px] uppercase tracking-wide text-slate-400">Company</span>
+                <span class="block text-sm font-medium text-slate-700 truncate">{{ $workspace->name }}</span>
+            </span>
+            <svg class="w-4 h-4 text-slate-400 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 3a.75.75 0 01.55.24l3.25 3.5a.75.75 0 11-1.1 1.02L10 4.852 7.3 7.76a.75.75 0 01-1.1-1.02l3.25-3.5A.75.75 0 0110 3zm-3.8 9.24a.75.75 0 011.1-.02L10 15.148l2.7-2.908a.75.75 0 111.1 1.02l-3.25 3.5a.75.75 0 01-1.1 0l-3.25-3.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
+        </button>
+        <div x-show="open" @click.outside="open = false" x-transition class="mt-1 rounded-lg border border-slate-200 bg-white shadow-lg py-1" style="display:none">
+            @foreach ($myWorkspaces as $ws)
+                <form method="POST" action="{{ route('workspaces.switch', $ws) }}">
+                    @csrf
+                    <button class="w-full flex items-center gap-2 px-3 py-2 text-sm text-left hover:bg-slate-50 {{ $ws->id === $workspace->id ? 'text-brand-700 font-medium' : 'text-slate-700' }}">
+                        <span class="truncate">{{ $ws->name }}</span>
+                        @if ($ws->id === $workspace->id)<span class="ml-auto text-brand-600">✓</span>@endif
+                    </button>
+                </form>
+            @endforeach
+            <a href="{{ route('workspaces.create') }}" class="block px-3 py-2 text-sm text-brand-600 hover:bg-slate-50 border-t border-slate-100">+ New company</a>
+        </div>
     </div>
 @endif
 
@@ -46,6 +65,11 @@
         <div class="pt-3 pb-1 px-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Operate</div>
         <x-ui.nav-item :href="route('admin.disputes.index')" :active="request()->routeIs('admin.disputes.*')" :icon="$ico['dispute']">Disputes</x-ui.nav-item>
         <x-ui.nav-item :href="route('admin.reports.index')" :active="request()->routeIs('admin.reports.*')" :icon="$ico['report']">Reports</x-ui.nav-item>
+
+        @if ($isFullAdmin)
+            <div class="pt-3 pb-1 px-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Administration</div>
+            <x-ui.nav-item :href="route('admin.members.index')" :active="request()->routeIs('admin.members.*')" :icon="$ico['team']">Team</x-ui.nav-item>
+        @endif
     @else
         <x-ui.nav-item :href="route('disputes.index')" :active="request()->routeIs('disputes.*')" :icon="$ico['dispute']">My disputes</x-ui.nav-item>
     @endif
