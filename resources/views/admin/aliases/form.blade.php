@@ -47,6 +47,12 @@
                 </select>
             </div>
 
+            <div>
+                <x-input-label for="split_percent" value="Split percent" />
+                <x-text-input id="split_percent" name="split_percent" type="number" step="0.01" min="0" max="100" class="block mt-1 w-full" :value="old('split_percent', $alias->split_percent ?? 100)" />
+                <p class="mt-1 text-xs text-gray-500">Percent of a matched transaction credited to this user. Use e.g. 50 on two aliases to split a deal 50/50.</p>
+            </div>
+
             <div class="flex items-center justify-end gap-3">
                 <a href="{{ route('admin.aliases.index') }}" class="text-sm text-gray-600 hover:text-gray-900">Cancel</a>
                 <x-primary-button>{{ $isEdit ? 'Save' : 'Create alias' }}</x-primary-button>

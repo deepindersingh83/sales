@@ -24,8 +24,10 @@ class MemberController extends Controller
     {
         $this->authorizeFullAdmin();
 
+        $members = $this->workspace()->users()->orderBy('name')->get();
+
         return view('admin.members.index', [
-            'members' => $this->workspace()->users()->orderBy('name')->get(),
+            'members' => $members,
             'roles' => Role::cases(),
         ]);
     }
@@ -74,7 +76,12 @@ class MemberController extends Controller
 
         abort_unless($member->belongsToWorkspace($workspace), 404);
 
-        $data = $request->validate(['role' => ['required', Rule::enum(Role::class)]]);
+        $memberIds = $workspace->users()->pluck('users.id')->all();
+
+        $data = $request->validate([
+            'role' => ['required', Rule::enum(Role::class)],
+            'manager_id' => ['nullable', 'integer', Rule::in($memberIds), Rule::notIn([$member->id])],
+        ]);
 
         // Don't allow removing the last Full Admin via a demotion.
         if ($member->roleIn($workspace) === Role::FullAdmin && $data['role'] !== Role::FullAdmin->value
@@ -82,9 +89,12 @@ class MemberController extends Controller
             return back()->withErrors(['role' => 'A workspace must keep at least one Full Admin.']);
         }
 
-        $workspace->users()->updateExistingPivot($member->id, ['role' => $data['role']]);
+        $workspace->users()->updateExistingPivot($member->id, [
+            'role' => $data['role'],
+            'manager_id' => $data['manager_id'] ?? null,
+        ]);
 
-        return redirect()->route('admin.members.index')->with('status', 'Role updated.');
+        return redirect()->route('admin.members.index')->with('status', 'Member updated.');
     }
 
     public function destroy(User $member): RedirectResponse

@@ -47,9 +47,9 @@ class CalculationEngine
 
         return DB::transaction(function () use ($run, $snapshot, $metric, $tiers, $rewardRules, &$credited, &$uncredited, &$acc) {
             foreach ($this->transactionsFor($run, $snapshot) as $tx) {
-                $userId = $this->strategy->creditUserId($tx);
+                $allocations = $this->strategy->allocations($tx);
 
-                if ($userId === null) {
+                if (empty($allocations)) {
                     $uncredited++;
                     $this->log($run, 'uncredited', $tx, null, null, null, 'No alias matched this transaction.');
 
@@ -58,24 +58,30 @@ class CalculationEngine
 
                 $value = $tx->metricValue($metric);
 
-                Credit::create([
-                    'calc_run_id' => $run->id,
-                    'transaction_id' => $tx->id,
-                    'user_id' => $userId,
-                    'credited_amount' => $value,
-                    'currency' => $tx->currency,
-                    'status' => 'pending',
-                ]);
+                foreach ($allocations as $alloc) {
+                    $userId = $alloc['user_id'];
+                    $fraction = $alloc['fraction'];
+                    $credit = $value * $fraction;
 
-                $this->log($run, 'credit_matched', $tx, $userId, 0.0, $value,
-                    "Credited {$metric} value to user #{$userId}.",
-                    ['metric' => $metric]);
+                    Credit::create([
+                        'calc_run_id' => $run->id,
+                        'transaction_id' => $tx->id,
+                        'user_id' => $userId,
+                        'credited_amount' => $credit,
+                        'currency' => $tx->currency,
+                        'status' => 'pending',
+                    ]);
 
-                $acc[$userId] ??= ['attainment' => 0.0, 'revenue' => 0.0, 'profit' => 0.0];
-                $acc[$userId]['attainment'] += $value;
-                $acc[$userId]['revenue'] += (float) $tx->amount;
-                $acc[$userId]['profit'] += (float) ($tx->profit_amount ?? 0);
-                $credited++;
+                    $this->log($run, 'credit_matched', $tx, $userId, 0.0, $credit,
+                        'Credited '.($fraction < 1.0 ? round($fraction * 100, 2).'% of ' : '')."{$metric} value to user #{$userId}.",
+                        ['metric' => $metric, 'fraction' => $fraction]);
+
+                    $acc[$userId] ??= ['attainment' => 0.0, 'revenue' => 0.0, 'profit' => 0.0];
+                    $acc[$userId]['attainment'] += $credit;
+                    $acc[$userId]['revenue'] += (float) $tx->amount * $fraction;
+                    $acc[$userId]['profit'] += (float) ($tx->profit_amount ?? 0) * $fraction;
+                    $credited++;
+                }
             }
 
             $commissionTotal = 0.0;
@@ -100,6 +106,8 @@ class CalculationEngine
                 $this->applyRewardRules($run, $userId, $totals, $rewardRules, $snapshot);
             }
 
+            $this->applyManagerOverrides($run, $snapshot, $acc);
+
             return [
                 'credited' => $credited,
                 'uncredited' => $uncredited,
@@ -107,6 +115,57 @@ class CalculationEngine
                 'commission_total' => round($commissionTotal, 4),
             ];
         });
+    }
+
+    /**
+     * A manager earns manager_override_percent of their direct reports'
+     * credited attainment (single-level rollup).
+     *
+     * @param  array<int, array{attainment:float, revenue:float, profit:float}>  $acc
+     */
+    protected function applyManagerOverrides(CalcRun $run, array $snapshot, array $acc): void
+    {
+        $pct = $snapshot['plan']['manager_override_percent'] ?? null;
+        if ($pct === null || (float) $pct == 0.0) {
+            return;
+        }
+        $pct = (float) $pct;
+
+        // Reporting lines for this workspace: report user_id => manager user_id.
+        $managerOf = DB::table('workspace_user')
+            ->where('workspace_id', $run->workspace_id)
+            ->whereNotNull('manager_id')
+            ->pluck('manager_id', 'user_id');
+
+        $teamAttainment = [];
+        foreach ($acc as $userId => $totals) {
+            $managerId = $managerOf[$userId] ?? null;
+            if ($managerId !== null) {
+                $teamAttainment[$managerId] = ($teamAttainment[$managerId] ?? 0.0) + $totals['attainment'];
+            }
+        }
+
+        foreach ($teamAttainment as $managerId => $teamAtt) {
+            $amount = round($teamAtt * $pct / 100.0, 4);
+            if ($amount == 0.0) {
+                continue;
+            }
+
+            Reward::create([
+                'calc_run_id' => $run->id,
+                'user_id' => $managerId,
+                'plan_id' => $run->plan_id,
+                'reward_type' => RewardType::Override->value,
+                'computed_amount' => $amount,
+                'currency' => $snapshot['plan']['currency'] ?? 'USD',
+                'meta' => ['team_attainment' => $teamAtt, 'override_percent' => $pct],
+                'status' => 'pending',
+            ]);
+
+            $this->log($run, 'override_applied', null, $managerId, 0.0, $amount,
+                "Manager override {$pct}% on team attainment ".round($teamAtt, 2).'.',
+                ['team_attainment' => $teamAtt, 'override_percent' => $pct]);
+        }
     }
 
     /**

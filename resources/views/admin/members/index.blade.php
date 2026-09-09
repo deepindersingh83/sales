@@ -43,7 +43,7 @@
                 <thead class="bg-slate-50">
                     <tr class="text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
                         <th class="px-6 py-3">Member</th>
-                        <th class="px-6 py-3">Role</th>
+                        <th class="px-6 py-3">Role &amp; manager</th>
                         <th class="px-6 py-3"></th>
                     </tr>
                 </thead>
@@ -55,11 +55,19 @@
                                 <div class="text-xs text-slate-400">{{ $member->email }}</div>
                             </td>
                             <td class="px-6 py-4">
-                                <form method="POST" action="{{ route('admin.members.update', $member) }}" class="flex items-center gap-2">
+                                <form method="POST" action="{{ route('admin.members.update', $member) }}" class="flex flex-wrap items-center gap-2">
                                     @csrf @method('PUT')
                                     <select name="role" onchange="this.form.submit()" class="border-slate-300 rounded-lg shadow-sm text-sm py-1">
                                         @foreach ($roles as $r)
                                             <option value="{{ $r->value }}" @selected($member->pivot->role === $r->value)>{{ $r->label() }}</option>
+                                        @endforeach
+                                    </select>
+                                    <select name="manager_id" onchange="this.form.submit()" class="border-slate-300 rounded-lg shadow-sm text-sm py-1 text-slate-500">
+                                        <option value="">— no manager —</option>
+                                        @foreach ($members as $m)
+                                            @if ($m->id !== $member->id)
+                                                <option value="{{ $m->id }}" @selected((int) $member->pivot->manager_id === $m->id)>Reports to {{ $m->name }}</option>
+                                            @endif
                                         @endforeach
                                     </select>
                                 </form>

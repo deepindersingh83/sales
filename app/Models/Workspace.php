@@ -49,7 +49,7 @@ class Workspace extends Model
     public function users(): BelongsToMany
     {
         return $this->belongsToMany(User::class, 'workspace_user')
-            ->withPivot(['role'])
+            ->withPivot(['role', 'manager_id'])
             ->withTimestamps();
     }
 }

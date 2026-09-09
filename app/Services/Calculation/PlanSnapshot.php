@@ -29,6 +29,7 @@ class PlanSnapshot
                 'quota' => $plan->quota !== null ? (float) $plan->quota : null,
                 'payout_cap' => $plan->payout_cap !== null ? (float) $plan->payout_cap : null,
                 'commission_formula' => $plan->commission_formula,
+                'manager_override_percent' => $plan->manager_override_percent !== null ? (float) $plan->manager_override_percent : null,
                 'currency' => $plan->currency,
             ],
             'tiers' => $plan->tiers->map(fn ($t) => [

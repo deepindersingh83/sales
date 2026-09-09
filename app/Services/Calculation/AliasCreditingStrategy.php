@@ -44,4 +44,30 @@ class AliasCreditingStrategy implements CreditingStrategy
 
         return null;
     }
+
+    /**
+     * All credit allocations for a transaction. A single matching alias credits
+     * 100% (unless its split_percent says otherwise); several matching aliases
+     * split the transaction by their split_percent (deal splits).
+     *
+     * @return array<int, array{user_id:int, fraction:float}>
+     */
+    public function allocations(Transaction $transaction): array
+    {
+        if ($this->aliases === null) {
+            $this->warm();
+        }
+
+        $allocations = [];
+        foreach ($this->aliases as $alias) {
+            if ($alias->user_id !== null && $alias->matches($transaction)) {
+                $allocations[] = [
+                    'user_id' => $alias->user_id,
+                    'fraction' => ((float) $alias->split_percent) / 100.0,
+                ];
+            }
+        }
+
+        return $allocations;
+    }
 }

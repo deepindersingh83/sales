@@ -56,6 +56,15 @@ running `DECISIONS.md`.
 - **D10 — Reward-rule percentage values.** `cash_pct_*` reward-rule values are stored as fractions
   (e.g. `0.02` = 2%), consistent with tier rates.
 
+- **D11 — Split crediting (supersedes part of D8).** Crediting now considers **all** matching
+  aliases, not just the first. Each matching alias credits its `split_percent` (default 100%) of
+  the transaction to its user, enabling deal splits (e.g. two aliases at 50% each). A single
+  matching alias still credits 100%. Overlapping aliases at 100% will double-credit by design —
+  configure percentages for true splits.
+- **D12 — Manager overrides.** `workspace_user.manager_id` defines a single-level reporting line;
+  a plan's `manager_override_percent` pays each manager that % of their direct reports' credited
+  attainment as an `override` reward. Multi-level rollups are a future extension.
+
 ## Open items / deferred (Phase 2, not built)
 
 - Multi-currency + live FX (schema built now, single-currency behavior only).

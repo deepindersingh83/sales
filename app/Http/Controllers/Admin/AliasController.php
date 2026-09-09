@@ -80,6 +80,7 @@ class AliasController extends Controller
             'alias_value' => ['required', 'string', 'max:255'],
             'match_field' => ['required', 'string', 'max:255'],
             'match_type' => ['required', 'in:exact,contains'],
+            'split_percent' => ['nullable', 'numeric', 'min:0', 'max:100'],
         ]);
     }
 

@@ -25,6 +25,7 @@ class Plan extends Model
         'quota',
         'payout_cap',
         'commission_formula',
+        'manager_override_percent',
         'currency',
     ];
 

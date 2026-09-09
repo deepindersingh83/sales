@@ -97,6 +97,11 @@
                         <x-input-label for="payout_cap" value="Payout cap (max commission per rep)" />
                         <x-text-input id="payout_cap" name="payout_cap" type="number" step="0.01" min="0" class="block mt-1 w-full" :value="old('payout_cap', $plan->payout_cap)" />
                     </div>
+                    <div>
+                        <x-input-label for="manager_override_percent" value="Manager override %" />
+                        <x-text-input id="manager_override_percent" name="manager_override_percent" type="number" step="0.01" min="0" max="100" class="block mt-1 w-full" :value="old('manager_override_percent', $plan->manager_override_percent)" />
+                        <p class="mt-1 text-xs text-gray-500">Managers earn this % of their direct reports' credited attainment.</p>
+                    </div>
                 </div>
                 <div>
                     <x-input-label for="commission_formula" value="Custom commission formula (optional)" />

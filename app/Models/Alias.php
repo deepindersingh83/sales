@@ -24,6 +24,7 @@ class Alias extends Model
         'alias_value',
         'match_field',
         'match_type',
+        'split_percent',
     ];
 
     public function user(): BelongsTo

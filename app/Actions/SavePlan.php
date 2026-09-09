@@ -27,6 +27,7 @@ class SavePlan
                 'quota' => $data['quota'] ?? null,
                 'payout_cap' => $data['payout_cap'] ?? null,
                 'commission_formula' => $data['commission_formula'] ?? null,
+                'manager_override_percent' => $data['manager_override_percent'] ?? null,
                 'currency' => strtoupper($data['currency']),
             ])->save();
 

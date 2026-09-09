@@ -38,6 +38,7 @@ class PlanRequest extends FormRequest
                     $fail('The commission formula is not valid.');
                 }
             }],
+            'manager_override_percent' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'currency' => ['required', 'string', 'size:3'],
 
             'tiers' => ['array'],
