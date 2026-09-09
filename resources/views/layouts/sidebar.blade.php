@@ -22,7 +22,7 @@
 {{-- Brand --}}
 <div class="h-16 flex items-center gap-2.5 px-5 border-b border-slate-200">
     <span class="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-brand-600 text-white font-bold">₡</span>
-    <span class="font-semibold text-slate-800 truncate">{{ config('app.name', 'Commission') }}</span>
+    <span class="font-semibold text-slate-800 truncate">{{ config('branding.name') }}</span>
 </div>
 
 {{-- Workspace switcher --}}
