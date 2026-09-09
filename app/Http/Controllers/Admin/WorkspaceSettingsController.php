@@ -39,6 +39,17 @@ class WorkspaceSettingsController extends Controller
         return redirect()->route('admin.settings.edit')->with('status', 'Settings saved.');
     }
 
+    public function regenerateToken(): RedirectResponse
+    {
+        $this->authorizeFullAdmin();
+
+        $token = $this->workspace()->regenerateApiToken();
+
+        return redirect()->route('admin.settings.edit')
+            ->with('status', 'New API token generated — copy it now, it is shown only once.')
+            ->with('api_token', $token);
+    }
+
     protected function authorizeFullAdmin(): void
     {
         abort_unless(request()->user()?->currentRole() === Role::FullAdmin, 403, 'Full Admin only.');

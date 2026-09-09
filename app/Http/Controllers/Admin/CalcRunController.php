@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Actions\SimulateCalc;
 use App\Actions\StartCalcRun;
 use App\Http\Controllers\Controller;
 use App\Models\CalcRun;
@@ -36,6 +37,20 @@ class CalcRunController extends Controller
         return redirect()
             ->route('admin.calc-runs.show', $run)
             ->with('status', 'Calculation queued. This page refreshes as it runs.');
+    }
+
+    /** Projected payouts without persisting anything (what-if). */
+    public function simulate(Plan $plan, SimulateCalc $simulator): View
+    {
+        Gate::authorize('createForPlan', [CalcRun::class, $plan]);
+
+        $result = $simulator->handle($plan, request()->user()->id);
+
+        return view('admin.calc_runs.simulation', [
+            'plan' => $plan,
+            'summary' => $result['summary'],
+            'rewards' => $result['rewards'],
+        ]);
     }
 
     public function show(CalcRun $calcRun): View

@@ -45,6 +45,21 @@ php artisan test
 php artisan serve   # + `php artisan queue:work` for calculations
 ```
 
+## REST API
+
+Per-workspace bearer token (generate under **Settings → REST API**). Every call
+is tenant-scoped by the token.
+
+- `POST /api/v1/transactions` — idempotent ingest / webhook target
+  (`{ "source_system": "...", "transactions": [ { "external_id", "amount", ... } ] }`).
+- `GET /api/v1/payouts` — released-rewards feed for BI tools (Power BI / Tableau).
+
+```bash
+curl -X POST https://<host>/api/v1/transactions \
+  -H "Authorization: Bearer wsk_..." -H "Content-Type: application/json" \
+  -d '{"transactions":[{"external_id":"D-1","amount":1000,"currency":"USD"}]}'
+```
+
 ## Deployment
 
 See `DEPLOYMENT.md` for CloudPanel/LEMP steps. The most common fresh-deploy 500

@@ -77,6 +77,7 @@ Route::middleware(['auth', 'workspace.admin'])
         // Calculation runs (queued).
         Route::get('calc-runs', [CalcRunController::class, 'index'])->name('calc-runs.index');
         Route::post('plans/{plan}/calc-runs', [CalcRunController::class, 'store'])->name('plans.calc-runs.store');
+        Route::post('plans/{plan}/simulate', [CalcRunController::class, 'simulate'])->name('plans.simulate');
         Route::get('calc-runs/{calcRun}', [CalcRunController::class, 'show'])->name('calc-runs.show');
         Route::get('calc-runs/{calcRun}/status', [CalcRunController::class, 'status'])->name('calc-runs.status');
         Route::get('calc-runs/{calcRun}/logs', [CalcRunController::class, 'logs'])->name('calc-runs.logs');
@@ -97,6 +98,7 @@ Route::middleware(['auth', 'workspace.admin'])
         // Workspace settings (Full Admin).
         Route::get('settings', [WorkspaceSettingsController::class, 'edit'])->name('settings.edit');
         Route::put('settings', [WorkspaceSettingsController::class, 'update'])->name('settings.update');
+        Route::post('settings/api-token', [WorkspaceSettingsController::class, 'regenerateToken'])->name('settings.api-token');
 
         // FX rates (Full Admin).
         Route::get('fx', [FxRateController::class, 'index'])->name('fx.index');

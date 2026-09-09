@@ -25,5 +25,24 @@
                 </div>
             </form>
         </x-ui.card>
+
+        <x-ui.card>
+            <h2 class="text-sm font-semibold text-slate-800">REST API</h2>
+            <p class="mt-1 text-xs text-slate-500">
+                Authenticate with <code>Authorization: Bearer &lt;token&gt;</code>.
+                Ingest: <code>POST {{ url('/api/v1/transactions') }}</code> ·
+                Payouts feed: <code>GET {{ url('/api/v1/payouts') }}</code>
+            </p>
+            @if (session('api_token'))
+                <div class="mt-3 rounded-lg bg-emerald-50 border border-emerald-200 p-3 text-sm">
+                    <div class="text-emerald-800 font-medium">New token (shown once):</div>
+                    <code class="break-all text-emerald-900">{{ session('api_token') }}</code>
+                </div>
+            @endif
+            <form method="POST" action="{{ route('admin.settings.api-token') }}" class="mt-3">
+                @csrf
+                <x-ui.button variant="secondary">Generate / regenerate token</x-ui.button>
+            </form>
+        </x-ui.card>
     </div>
 </x-app-layout>

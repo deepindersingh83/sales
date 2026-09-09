@@ -19,7 +19,23 @@ class Workspace extends Model
         'name',
         'slug',
         'base_currency',
+        'api_token',
     ];
+
+    protected $hidden = [
+        'api_token',
+    ];
+
+    /**
+     * Generate (or regenerate) this workspace's API token and return it.
+     */
+    public function regenerateApiToken(): string
+    {
+        $token = 'wsk_'.Str::random(48);
+        $this->forceFill(['api_token' => $token])->save();
+
+        return $token;
+    }
 
     protected static function booted(): void
     {
