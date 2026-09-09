@@ -70,10 +70,12 @@
         @if ($isFullAdmin)
             <div class="pt-3 pb-1 px-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Administration</div>
             <x-ui.nav-item :href="route('admin.members.index')" :active="request()->routeIs('admin.members.*')" :icon="$ico['team']">Team</x-ui.nav-item>
+            <x-ui.nav-item :href="route('admin.connectors.index')" :active="request()->routeIs('admin.connectors.*')" :icon="$ico['tx']">Integrations</x-ui.nav-item>
             <x-ui.nav-item :href="route('admin.fx.index')" :active="request()->routeIs('admin.fx.*')" :icon="$ico['report']">FX rates</x-ui.nav-item>
             <x-ui.nav-item :href="route('admin.settings.edit')" :active="request()->routeIs('admin.settings.*')" :icon="$ico['calc']">Settings</x-ui.nav-item>
         @endif
     @else
+        <x-ui.nav-item :href="route('enrollments.index')" :active="request()->routeIs('enrollments.*')" :icon="$ico['plans']">Plans &amp; terms</x-ui.nav-item>
         <x-ui.nav-item :href="route('disputes.index')" :active="request()->routeIs('disputes.*')" :icon="$ico['dispute']">My disputes</x-ui.nav-item>
     @endif
 </nav>

@@ -3,6 +3,7 @@
 use App\Http\Controllers\Admin\AliasController;
 use App\Http\Controllers\Admin\CalcRunController;
 use App\Http\Controllers\Admin\CalcRunReleaseController;
+use App\Http\Controllers\Admin\ConnectorController;
 use App\Http\Controllers\Admin\AnnouncementController;
 use App\Http\Controllers\Admin\DisputeQueueController;
 use App\Http\Controllers\Admin\FxRateController;
@@ -15,6 +16,7 @@ use App\Http\Controllers\Admin\TransactionImportController;
 use App\Http\Controllers\Admin\WorkspaceSettingsController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DisputeController;
+use App\Http\Controllers\EnrollmentController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\WorkspaceController;
 use Illuminate\Support\Facades\Route;
@@ -40,6 +42,10 @@ Route::middleware('auth')->group(function () {
     Route::get('/disputes/{dispute}', [DisputeController::class, 'show'])->name('disputes.show');
     Route::post('/disputes/{dispute}/comments', [DisputeController::class, 'storeComment'])->name('disputes.comments.store');
     Route::patch('/disputes/{dispute}/resolve', [DisputeController::class, 'resolve'])->name('disputes.resolve');
+
+    // Plan enrollment with typed-name e-signature.
+    Route::get('/enrollments', [EnrollmentController::class, 'index'])->name('enrollments.index');
+    Route::post('/enrollments/{plan}/sign', [EnrollmentController::class, 'sign'])->name('enrollments.sign');
 
     // Multi-company: switch between workspaces / create a new one.
     Route::post('/workspaces/{workspace}/switch', [WorkspaceController::class, 'switch'])->name('workspaces.switch');
@@ -111,6 +117,10 @@ Route::middleware(['auth', 'workspace.admin'])
         Route::get('reports/payout-by-plan', [ReportController::class, 'payoutByPlan'])->name('reports.payout-by-plan');
         Route::get('reports/crediting', [ReportController::class, 'crediting'])->name('reports.crediting');
         Route::get('reports/double-payments', [ReportController::class, 'doublePayments'])->name('reports.double-payments');
+        Route::get('reports/asc606', [ReportController::class, 'asc606'])->name('reports.asc606');
+
+        // Integrations catalogue (connector framework).
+        Route::get('connectors', [ConnectorController::class, 'index'])->name('connectors.index');
     });
 
 require __DIR__.'/auth.php';

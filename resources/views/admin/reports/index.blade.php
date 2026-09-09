@@ -28,6 +28,10 @@
                 <div class="text-lg font-medium text-gray-900">Double-payment detection</div>
                 <p class="mt-1 text-sm text-gray-500">Transactions with matching amount + date — possible duplicates.</p>
             </a>
+            <a href="{{ route('admin.reports.asc606') }}" class="block bg-white shadow-sm sm:rounded-lg p-6 hover:bg-gray-50">
+                <div class="text-lg font-medium text-gray-900">ASC 606 amortization</div>
+                <p class="mt-1 text-sm text-gray-500">Straight-line recognition of released commissions over time.</p>
+            </a>
         </div>
     </div>
 </x-app-layout>

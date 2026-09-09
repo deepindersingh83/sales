@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Services\DoublePaymentDetector;
+use App\Services\Reporting\Asc606Report;
 use App\Services\Reporting\ReportBuilder;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -16,6 +17,14 @@ class ReportController extends Controller
     public function doublePayments(DoublePaymentDetector $detector): View
     {
         return view('admin.reports.double_payments', ['suspects' => $detector->suspects()]);
+    }
+
+    public function asc606(Request $request, Asc606Report $report): View
+    {
+        $months = (int) $request->integer('months', 12);
+        $schedule = $report->schedule($months);
+
+        return view('admin.reports.asc606', ['schedule' => $schedule, 'months' => $schedule['months']]);
     }
 
     public function index(): View

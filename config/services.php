@@ -35,4 +35,20 @@ return [
         ],
     ],
 
+    // AI assistant (payee Q&A). Unset by default — the assistant runs as a stub
+    // until a provider key is supplied. See docs/INTEGRATIONS.md.
+    'ai' => [
+        'key' => env('AI_API_KEY'),
+        'model' => env('AI_MODEL', 'claude-sonnet-5'),
+    ],
+
+    // Single-sign-on. Unset by default; enabling requires an OAuth/SAML provider
+    // (e.g. Laravel Socialite) plus the provider's client credentials.
+    'sso' => [
+        'enabled' => env('SSO_ENABLED', false),
+        'provider' => env('SSO_PROVIDER'),
+        'client_id' => env('SSO_CLIENT_ID'),
+        'client_secret' => env('SSO_CLIENT_SECRET'),
+    ],
+
 ];
