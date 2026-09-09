@@ -3,6 +3,7 @@
 namespace App\Services\Reporting;
 
 use App\Enums\PayoutStatus;
+use App\Enums\RewardType;
 use App\Models\Credit;
 use App\Models\Reward;
 use Illuminate\Support\Collection;
@@ -91,6 +92,93 @@ class ReportBuilder
             ->all();
 
         return $keys ?: ['product'];
+    }
+
+    /**
+     * Attainment (released credited amount) + payout per user.
+     *
+     * @return Collection<int, array{user:string, credited:float, payout:float}>
+     */
+    public function attainmentByUser(): Collection
+    {
+        $payouts = Reward::released()->get()->groupBy('user_id')
+            ->map(fn ($r) => (float) $r->sum('computed_amount'));
+
+        return Credit::released()->with('user')->get()
+            ->groupBy('user_id')
+            ->map(fn ($rows, $userId) => [
+                'user' => $rows->first()->user?->name ?? 'Unknown',
+                'credited' => round((float) $rows->sum('credited_amount'), 2),
+                'payout' => round((float) ($payouts[$userId] ?? 0), 2),
+            ])
+            ->sortByDesc('credited')
+            ->values();
+    }
+
+    /**
+     * Released payout grouped by reward type.
+     *
+     * @return Collection<int, array{type:string, total:float}>
+     */
+    public function payoutByType(): Collection
+    {
+        return Reward::released()->whereNotNull('computed_amount')->get()
+            ->groupBy(fn (Reward $r) => $r->reward_type->value)
+            ->map(fn ($rows, $type) => [
+                'type' => RewardType::from($type)->label(),
+                'total' => round((float) $rows->sum('computed_amount'), 2),
+            ])
+            ->sortByDesc('total')
+            ->values();
+    }
+
+    /**
+     * Released payout grouped by calendar month.
+     *
+     * @return Collection<int, array{month:string, total:float}>
+     */
+    public function payoutByMonth(): Collection
+    {
+        return Reward::released()->whereNotNull('computed_amount')->get()
+            ->groupBy(fn (Reward $r) => $r->created_at->format('Y-m'))
+            ->map(fn ($rows, $month) => [
+                'month' => $month,
+                'total' => round((float) $rows->sum('computed_amount'), 2),
+            ])
+            ->sortBy('month')
+            ->values();
+    }
+
+    /**
+     * Accrued commission liability — rewards earned but not yet released (paid),
+     * grouped by user. This is what finance owes but has not disbursed.
+     *
+     * @return Collection<int, array{user:string, liability:float}>
+     */
+    public function liabilityByUser(): Collection
+    {
+        return Reward::whereIn('status', [PayoutStatus::Pending, PayoutStatus::Reviewed])
+            ->whereNotNull('computed_amount')
+            ->with('user')
+            ->get()
+            ->groupBy('user_id')
+            ->map(fn ($rows) => [
+                'user' => $rows->first()->user?->name ?? 'Unknown',
+                'liability' => round((float) $rows->sum('computed_amount'), 2),
+            ])
+            ->sortByDesc('liability')
+            ->values();
+    }
+
+    public function totalLiability(): float
+    {
+        return round((float) Reward::whereIn('status', [PayoutStatus::Pending, PayoutStatus::Reviewed])
+            ->sum('computed_amount'), 2);
+    }
+
+    public function totalReleasedPayout(): float
+    {
+        return round((float) Reward::released()->sum('computed_amount'), 2);
     }
 
     public function hasReleasedData(): bool

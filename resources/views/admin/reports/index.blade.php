@@ -12,6 +12,18 @@
         @endunless
 
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <a href="{{ route('admin.reports.overview') }}" class="block bg-white shadow-sm sm:rounded-lg p-6 hover:bg-gray-50 ring-1 ring-brand-100">
+                <div class="text-lg font-medium text-brand-700">📊 Analytics overview</div>
+                <p class="mt-1 text-sm text-gray-500">Charts: top reps, payout by type &amp; month, liability.</p>
+            </a>
+            <a href="{{ route('admin.reports.attainment') }}" class="block bg-white shadow-sm sm:rounded-lg p-6 hover:bg-gray-50">
+                <div class="text-lg font-medium text-gray-900">Attainment by user</div>
+                <p class="mt-1 text-sm text-gray-500">Credited amount &amp; payout per rep.</p>
+            </a>
+            <a href="{{ route('admin.reports.liability') }}" class="block bg-white shadow-sm sm:rounded-lg p-6 hover:bg-gray-50">
+                <div class="text-lg font-medium text-gray-900">Commission liability</div>
+                <p class="mt-1 text-sm text-gray-500">Earned but not yet released, by rep.</p>
+            </a>
             <a href="{{ route('admin.reports.payout-by-user') }}" class="block bg-white shadow-sm sm:rounded-lg p-6 hover:bg-gray-50">
                 <div class="text-lg font-medium text-gray-900">Payout by user</div>
                 <p class="mt-1 text-sm text-gray-500">Total released payout per rep.</p>

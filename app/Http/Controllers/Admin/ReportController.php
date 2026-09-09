@@ -27,6 +27,42 @@ class ReportController extends Controller
         return view('admin.reports.asc606', ['schedule' => $schedule, 'months' => $schedule['months']]);
     }
 
+    /** Visual analytics dashboard. */
+    public function overview(): View
+    {
+        return view('admin.reports.overview', [
+            'topUsers' => $this->reports->payoutByUser()->take(8),
+            'byType' => $this->reports->payoutByType(),
+            'byMonth' => $this->reports->payoutByMonth(),
+            'totalReleased' => $this->reports->totalReleasedPayout(),
+            'totalLiability' => $this->reports->totalLiability(),
+        ]);
+    }
+
+    public function attainment(Request $request): View|BaseStreamedResponse
+    {
+        $rows = $this->reports->attainmentByUser();
+
+        if ($request->query('export') === 'csv') {
+            return $this->csv('attainment-by-user.csv', ['User', 'Credited', 'Payout'],
+                $rows->map(fn ($r) => [$r['user'], $r['credited'], $r['payout']]));
+        }
+
+        return view('admin.reports.attainment', ['rows' => $rows]);
+    }
+
+    public function liability(Request $request): View|BaseStreamedResponse
+    {
+        $rows = $this->reports->liabilityByUser();
+
+        if ($request->query('export') === 'csv') {
+            return $this->csv('liability-by-user.csv', ['User', 'Liability'],
+                $rows->map(fn ($r) => [$r['user'], $r['liability']]));
+        }
+
+        return view('admin.reports.liability', ['rows' => $rows, 'total' => $this->reports->totalLiability()]);
+    }
+
     public function index(): View
     {
         return view('admin.reports.index', [
