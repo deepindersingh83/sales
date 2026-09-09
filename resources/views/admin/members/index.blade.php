@@ -70,6 +70,7 @@
                                             @endif
                                         @endforeach
                                     </select>
+                                    <input type="number" step="0.01" min="0" name="salary" value="{{ $member->pivot->salary }}" onchange="this.form.submit()" placeholder="Salary" class="w-28 border-slate-300 rounded-lg shadow-sm text-sm py-1" />
                                 </form>
                             </td>
                             <td class="px-6 py-4 text-right">

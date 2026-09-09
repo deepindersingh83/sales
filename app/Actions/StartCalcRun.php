@@ -17,9 +17,9 @@ class StartCalcRun
 {
     public function __construct(protected PlanSnapshot $snapshot) {}
 
-    public function handle(Plan $plan, ?int $userId = null, bool $isSimulation = false): CalcRun
+    public function handle(Plan $plan, ?int $userId = null, bool $isSimulation = false, string $mode = 'standard'): CalcRun
     {
-        return DB::transaction(function () use ($plan, $userId, $isSimulation) {
+        return DB::transaction(function () use ($plan, $userId, $isSimulation, $mode) {
             $version = $this->snapshot->capture($plan, $userId);
 
             $run = CalcRun::create([
@@ -27,6 +27,7 @@ class StartCalcRun
                 'plan_version_id' => $version->id,
                 'status' => CalcRunStatus::Queued,
                 'is_simulation' => $isSimulation,
+                'mode' => $mode,
                 'triggered_by_user_id' => $userId,
             ]);
 

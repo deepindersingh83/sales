@@ -84,6 +84,7 @@ Route::middleware(['auth', 'workspace.admin'])
         Route::get('calc-runs', [CalcRunController::class, 'index'])->name('calc-runs.index');
         Route::post('plans/{plan}/calc-runs', [CalcRunController::class, 'store'])->name('plans.calc-runs.store');
         Route::post('plans/{plan}/simulate', [CalcRunController::class, 'simulate'])->name('plans.simulate');
+        Route::post('plans/{plan}/true-up', [CalcRunController::class, 'trueUp'])->name('plans.true-up');
         Route::get('calc-runs/{calcRun}', [CalcRunController::class, 'show'])->name('calc-runs.show');
         Route::get('calc-runs/{calcRun}/status', [CalcRunController::class, 'status'])->name('calc-runs.status');
         Route::get('calc-runs/{calcRun}/logs', [CalcRunController::class, 'logs'])->name('calc-runs.logs');

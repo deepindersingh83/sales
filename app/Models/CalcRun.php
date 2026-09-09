@@ -19,6 +19,7 @@ class CalcRun extends Model
         'plan_version_id',
         'status',
         'is_simulation',
+        'mode',
         'error',
         'started_at',
         'completed_at',

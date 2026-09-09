@@ -16,6 +16,12 @@
                             Run calculation
                         </button>
                     </form>
+                    <form method="POST" action="{{ route('admin.plans.true-up', $plan) }}" onsubmit="return confirm('Run a true-up? This pays only the delta vs already-released commission.')">
+                        @csrf
+                        <button class="inline-flex items-center px-4 py-2 bg-white border border-slate-300 text-slate-700 text-sm font-medium rounded-md hover:bg-slate-50">
+                            True-up
+                        </button>
+                    </form>
                 @endcan
                 @can('manageAccess', $plan)
                     <a href="{{ route('admin.plans.access.edit', $plan) }}" class="text-sm text-slate-600 hover:text-slate-900">Manage access</a>

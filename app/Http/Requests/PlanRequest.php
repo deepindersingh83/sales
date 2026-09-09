@@ -24,11 +24,14 @@ class PlanRequest extends FormRequest
         return [
             'name' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
-            'period_type' => ['required', Rule::in(['monthly', 'quarterly', 'annual', 'custom'])],
+            'period_type' => ['required', Rule::in(['monthly', 'quarterly', 'annual', 'custom', 'qtd', 'ytd'])],
             'start_date' => ['nullable', 'date'],
             'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
             'status' => ['required', Rule::enum(PlanStatus::class)],
             'performance_metric' => ['required', Rule::in(['revenue', 'profit', 'custom'])],
+            'tax_rate_percent' => ['nullable', 'numeric', 'min:0', 'max:100'],
+            'filter_field' => ['nullable', 'string', 'max:255'],
+            'filter_value' => ['nullable', 'string', 'max:255'],
             'quota' => ['nullable', 'numeric', 'min:0'],
             'payout_cap' => ['nullable', 'numeric', 'min:0'],
             'commission_formula' => ['nullable', 'string', 'max:500', function ($attr, $value, $fail) {

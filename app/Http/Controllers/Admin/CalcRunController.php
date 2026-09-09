@@ -39,6 +39,18 @@ class CalcRunController extends Controller
             ->with('status', 'Calculation queued. This page refreshes as it runs.');
     }
 
+    /** Trigger a true-up run — pays the delta vs already-released commission. */
+    public function trueUp(Plan $plan, StartCalcRun $starter): RedirectResponse
+    {
+        Gate::authorize('createForPlan', [CalcRun::class, $plan]);
+
+        $run = $starter->handle($plan, request()->user()->id, false, 'true_up');
+
+        return redirect()
+            ->route('admin.calc-runs.show', $run)
+            ->with('status', 'True-up queued — it pays only the delta vs already-released commission.');
+    }
+
     /** Projected payouts without persisting anything (what-if). */
     public function simulate(Plan $plan, SimulateCalc $simulator): View
     {

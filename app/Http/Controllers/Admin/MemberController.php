@@ -81,6 +81,7 @@ class MemberController extends Controller
         $data = $request->validate([
             'role' => ['required', Rule::enum(Role::class)],
             'manager_id' => ['nullable', 'integer', Rule::in($memberIds), Rule::notIn([$member->id])],
+            'salary' => ['nullable', 'numeric', 'min:0'],
         ]);
 
         // Don't allow removing the last Full Admin via a demotion.
@@ -92,6 +93,7 @@ class MemberController extends Controller
         $workspace->users()->updateExistingPivot($member->id, [
             'role' => $data['role'],
             'manager_id' => $data['manager_id'] ?? null,
+            'salary' => $data['salary'] ?? null,
         ]);
 
         return redirect()->route('admin.members.index')->with('status', 'Member updated.');

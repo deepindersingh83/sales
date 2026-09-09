@@ -44,8 +44,8 @@
                     <div>
                         <x-input-label for="period_type" value="Period" />
                         <select id="period_type" name="period_type" class="block mt-1 w-full border-gray-300 rounded-md shadow-sm">
-                            @foreach (['monthly','quarterly','annual','custom'] as $p)
-                                <option value="{{ $p }}" @selected(old('period_type', $plan->period_type) === $p)>{{ ucfirst($p) }}</option>
+                            @foreach (['monthly'=>'Monthly','quarterly'=>'Quarterly','annual'=>'Annual','custom'=>'Custom','qtd'=>'Quarter-to-date','ytd'=>'Year-to-date'] as $val => $label)
+                                <option value="{{ $val }}" @selected(old('period_type', $plan->period_type) === $val)>{{ $label }}</option>
                             @endforeach
                         </select>
                     </div>
@@ -101,6 +101,21 @@
                         <x-input-label for="manager_override_percent" value="Manager override %" />
                         <x-text-input id="manager_override_percent" name="manager_override_percent" type="number" step="0.01" min="0" max="100" class="block mt-1 w-full" :value="old('manager_override_percent', $plan->manager_override_percent)" />
                         <p class="mt-1 text-xs text-gray-500">Managers earn this % of their direct reports' credited attainment.</p>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div>
+                        <x-input-label for="tax_rate_percent" value="Exclude tax %" />
+                        <x-text-input id="tax_rate_percent" name="tax_rate_percent" type="number" step="0.01" min="0" max="100" class="block mt-1 w-full" :value="old('tax_rate_percent', $plan->tax_rate_percent)" />
+                        <p class="mt-1 text-xs text-gray-500">Nets the crediting basis down by this %.</p>
+                    </div>
+                    <div>
+                        <x-input-label for="filter_field" value="Transaction filter — field" />
+                        <x-text-input id="filter_field" name="filter_field" class="block mt-1 w-full" :value="old('filter_field', $plan->filter_field)" placeholder="e.g. region" />
+                    </div>
+                    <div>
+                        <x-input-label for="filter_value" value="…equals value" />
+                        <x-text-input id="filter_value" name="filter_value" class="block mt-1 w-full" :value="old('filter_value', $plan->filter_value)" placeholder="e.g. North" />
                     </div>
                 </div>
                 <div>

@@ -2,6 +2,7 @@
 
 namespace App\Services\Calculation;
 
+use App\Enums\PayoutStatus;
 use App\Enums\RewardType;
 use App\Models\CalcLog;
 use App\Models\CalcRun;
@@ -29,6 +30,12 @@ class CalculationEngine
         protected FxConverter $fx,
     ) {}
 
+    /** @var array<int, float> user_id => salary (for salary-based allocations) */
+    protected array $salaries = [];
+
+    /** @var array<int, float> user_id => already-released commission (true-up mode) */
+    protected array $alreadyPaid = [];
+
     /**
      * @return array{credited:int, uncredited:int, reps:int, commission_total:float}
      */
@@ -42,6 +49,28 @@ class CalculationEngine
         $this->strategy->warm();
         $this->fx->forWorkspace($run->workspace_id);
         $planCurrency = $snapshot['plan']['currency'] ?? 'USD';
+
+        // Salaries for salary-based reward allocations.
+        $this->salaries = DB::table('workspace_user')
+            ->where('workspace_id', $run->workspace_id)
+            ->whereNotNull('salary')
+            ->pluck('salary', 'user_id')
+            ->map(fn ($s) => (float) $s)
+            ->all();
+
+        // True-up mode: what each rep was already paid on this plan (released
+        // commission from prior runs) — new commission is netted against it.
+        $this->alreadyPaid = [];
+        if ($run->mode === 'true_up') {
+            $this->alreadyPaid = Reward::where('plan_id', $run->plan_id)
+                ->where('reward_type', RewardType::Commission->value)
+                ->where('status', PayoutStatus::Released->value)
+                ->where('calc_run_id', '!=', $run->id)
+                ->get()
+                ->groupBy('user_id')
+                ->map(fn ($rows) => (float) $rows->sum('computed_amount'))
+                ->all();
+        }
 
         $credited = 0;
         $uncredited = 0;
@@ -63,9 +92,14 @@ class CalculationEngine
                 // match or no rate exists).
                 $txDate = optional($tx->transaction_date)->toDateString();
                 $rate = $this->fx->rate($tx->currency, $planCurrency, $txDate) ?? 1.0;
-                $value = $tx->metricValue($metric) * $rate;
-                $convAmount = (float) $tx->amount * $rate;
-                $convProfit = (float) ($tx->profit_amount ?? 0) * $rate;
+
+                // Exclude-tax basis: net the crediting value down by the plan tax rate.
+                $taxRate = $snapshot['plan']['tax_rate_percent'] ?? null;
+                $taxFactor = $taxRate !== null ? (1 - ((float) $taxRate) / 100.0) : 1.0;
+
+                $value = $tx->metricValue($metric) * $rate * $taxFactor;
+                $convAmount = (float) $tx->amount * $rate * $taxFactor;
+                $convProfit = (float) ($tx->profit_amount ?? 0) * $rate * $taxFactor;
 
                 if ($rate != 1.0) {
                     $this->log($run, 'fx_converted', $tx, null, $tx->metricValue($metric), $value,
@@ -239,6 +273,18 @@ class CalculationEngine
             $total = $cap;
         }
 
+        // True-up: pay only the delta between newly-earned gross and what was
+        // already released for this rep on this plan (can be negative — a claw-back).
+        if ($run->mode === 'true_up') {
+            $paid = $this->alreadyPaid[$userId] ?? 0.0;
+            $meta['true_up'] = true;
+            $meta['gross'] = round($total, 4);
+            $meta['already_paid'] = round($paid, 4);
+            $total = $total - $paid;
+            $this->log($run, 'true_up_applied', null, $userId, $meta['gross'], round($total, 4),
+                'True-up delta: gross '.$meta['gross'].' minus already-paid '.$meta['already_paid'].'.', $meta);
+        }
+
         return ['total' => round($total, 4), 'meta' => $meta];
     }
 
@@ -273,8 +319,12 @@ class CalculationEngine
                     $amount = ($value ?? 0) * $totals['profit'];
                     break;
                 case RewardType::CashPctSalary:
-                    // No salary data model in the MVP — record a note, no amount.
-                    $meta = array_merge($meta ?? [], ['note' => 'No salary on file (MVP).']);
+                    $salary = $this->salaries[$userId] ?? null;
+                    if ($salary !== null) {
+                        $amount = ($value ?? 0) * $salary;
+                    } else {
+                        $meta = array_merge($meta ?? [], ['note' => 'No salary on file for this member.']);
+                    }
                     break;
                 default:
                     // badge / email / announcement / prize — recognition only.
@@ -308,12 +358,33 @@ class CalculationEngine
     {
         $query = Transaction::query();
 
+        $period = $snapshot['plan']['period_type'] ?? null;
         $start = $snapshot['plan']['start_date'] ?? null;
         $end = $snapshot['plan']['end_date'] ?? null;
+
+        // Rolling to-date windows computed at run time.
+        if ($period === 'qtd') {
+            $start = now()->firstOfQuarter()->toDateString();
+            $end = now()->toDateString();
+        } elseif ($period === 'ytd') {
+            $start = now()->startOfYear()->toDateString();
+            $end = now()->toDateString();
+        }
 
         if ($start && $end) {
             $query->whereNotNull('transaction_date')
                 ->whereBetween('transaction_date', [$start, $end]);
+        }
+
+        // Per-plan transaction filter on a raw_data field (best-effort JSON match).
+        $filterField = $snapshot['plan']['filter_field'] ?? null;
+        $filterValue = $snapshot['plan']['filter_value'] ?? null;
+        if ($filterField && $filterValue !== null && $filterValue !== '') {
+            if (in_array($filterField, ['source_system', 'external_id', 'currency'], true)) {
+                $query->where($filterField, $filterValue);
+            } else {
+                $query->where('raw_data->'.$filterField, $filterValue);
+            }
         }
 
         return $query->orderBy('id')->cursor();
