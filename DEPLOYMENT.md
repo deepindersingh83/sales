@@ -82,3 +82,33 @@ Without a worker, calc runs stay in the `queued` state and never complete.
 
 Point the site's document root at `public/` (CloudPanel: site's "Root
 Directory" → `.../htdocs/<domain>/public`).
+
+## Troubleshooting
+
+### `tempnam(): file created in the system's temporary directory` (HTTP 500)
+Blade can't write compiled views because `storage/framework/views` isn't
+writable by the PHP-FPM user. Fix step 3 (writable directories), then
+`php artisan view:clear`.
+
+### `attempt to write a readonly database` (SQLite, HTTP 500)
+Two possibilities:
+
+1. **You're on SQLite in production but it isn't writable.** SQLite needs write
+   access to **both** the file and its parent directory (it writes `-wal` /
+   `-journal` files alongside):
+   ```bash
+   chown <site-user>:<site-user> database database/database.sqlite
+   chmod 775 database
+   chmod 664 database/database.sqlite
+   php artisan config:clear
+   ```
+2. **You should be on MySQL.** Production targets MySQL 8 — set the `DB_*`
+   values (step 2), then `php artisan config:clear && php artisan migrate --force`.
+
+Sessions default to the `database` driver, so every request writes to the DB —
+a read-only DB fails immediately. (Alternatively set `SESSION_DRIVER=file`, but
+the app still needs a writable database for its own data.)
+
+### Changed `.env` but nothing changed
+Config may be cached. Run `php artisan config:clear` (or re-run
+`php artisan config:cache`).
