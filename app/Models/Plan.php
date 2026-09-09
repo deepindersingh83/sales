@@ -46,7 +46,7 @@ class Plan extends Model
 
     public function rewardRules(): HasMany
     {
-        return $this->hasMany(RewardRule::class);
+        return $this->hasMany(RewardRule::class)->orderBy('id');
     }
 
     public function terms(): HasMany
