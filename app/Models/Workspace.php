@@ -23,7 +23,23 @@ class Workspace extends Model
         'brand_name',
         'brand_color',
         'logo_url',
+        'subscription_tier',
+        'subscription_status',
+        'trial_ends_at',
+        'stripe_customer_id',
+        'stripe_subscription_id',
     ];
+
+    protected $hidden = [
+        'api_token',
+    ];
+
+    protected function casts(): array
+    {
+        return [
+            'trial_ends_at' => 'datetime',
+        ];
+    }
 
     /** The display name shown in white-labelled UI, falling back to the workspace name. */
     public function displayName(): string
@@ -31,9 +47,44 @@ class Workspace extends Model
         return $this->brand_name ?: $this->name;
     }
 
-    protected $hidden = [
-        'api_token',
-    ];
+    /** The current subscription tier key, defaulting to the configured default. */
+    public function tier(): string
+    {
+        return $this->subscription_tier ?: config('billing.default_tier', 'free');
+    }
+
+    /** The tier's configuration array. */
+    public function tierConfig(): array
+    {
+        $tiers = config('billing.tiers');
+
+        return $tiers[$this->tier()] ?? $tiers[config('billing.default_tier', 'free')];
+    }
+
+    /** Is the workspace currently within a free trial? */
+    public function onTrial(): bool
+    {
+        return $this->trial_ends_at !== null && $this->trial_ends_at->isFuture();
+    }
+
+    /** A paid tier (anything other than free) counts as a subscription. */
+    public function onPaidTier(): bool
+    {
+        return $this->tier() !== 'free';
+    }
+
+    /**
+     * Hard cap on active payees for the current tier, or null for unlimited.
+     * A trial lifts the free-tier cap so prospects can evaluate at full size.
+     */
+    public function payeeLimit(): ?int
+    {
+        if ($this->onPaidTier() || $this->onTrial()) {
+            return null;
+        }
+
+        return $this->tierConfig()['max_payees'] ?? null;
+    }
 
     /**
      * Generate (or regenerate) this workspace's API token and return it.

@@ -5,6 +5,7 @@ use App\Http\Controllers\Admin\CalcRunController;
 use App\Http\Controllers\Admin\CalcRunReleaseController;
 use App\Http\Controllers\Admin\ConnectorController;
 use App\Http\Controllers\Admin\AnnouncementController;
+use App\Http\Controllers\Admin\BillingController;
 use App\Http\Controllers\Admin\DisputeQueueController;
 use App\Http\Controllers\Admin\FxRateController;
 use App\Http\Controllers\Admin\MemberController;
@@ -147,6 +148,11 @@ Route::middleware(['auth', 'workspace.admin'])
         Route::get('surveys', [SurveyController::class, 'index'])->name('surveys.index');
         Route::post('surveys', [SurveyController::class, 'store'])->name('surveys.store');
         Route::delete('surveys/{survey}', [SurveyController::class, 'destroy'])->name('surveys.destroy');
+
+        // Billing & subscription (Full Admin).
+        Route::get('billing', [BillingController::class, 'index'])->name('billing.index');
+        Route::put('billing', [BillingController::class, 'update'])->name('billing.update');
+        Route::post('billing/trial', [BillingController::class, 'startTrial'])->name('billing.trial');
 
         // Workspace settings (Full Admin).
         Route::get('settings', [WorkspaceSettingsController::class, 'edit'])->name('settings.edit');

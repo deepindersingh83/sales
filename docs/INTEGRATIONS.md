@@ -40,6 +40,16 @@ Enrollment already captures a typed-name signature + timestamp. A provider
 (e.g. DocuSign) is an additive upgrade: swap the sign action for a provider
 envelope and store the returned envelope id alongside the existing fields.
 
+### Billing / subscriptions (Stripe)
+Tiers, per-active-payee metering, trials and the Free-tier payee cap are fully
+live and enforced locally (`config/billing.php`, `App\Services\Billing\`).
+Metering counts distinct members who received a released payout in the period.
+Without `STRIPE_SECRET` the app runs in **self-serve** mode: tier changes apply
+immediately and no card is charged. To go live, set `STRIPE_SECRET` /
+`STRIPE_WEBHOOK_SECRET` and implement the customer/subscription calls in
+`SubscriptionManager::changeTier()` (persist on webhook confirmation), reporting
+metered usage from `UsageMeter::snapshot()`.
+
 ## Notes
 - ASC 606 here is straight-line amortization of released commissions over a
   configurable number of months; wire real contract terms per deal for

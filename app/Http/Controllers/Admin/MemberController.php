@@ -6,6 +6,7 @@ use App\Enums\Role;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Models\Workspace;
+use App\Services\Billing\UsageMeter;
 use App\Support\WorkspaceContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -42,6 +43,16 @@ class MemberController extends Controller
             'email' => ['required', 'email', 'max:255'],
             'role' => ['required', Rule::enum(Role::class)],
         ]);
+
+        // Enforce the tier's payee cap (Free tier). Upgrading or starting a
+        // trial lifts the cap.
+        if (app(UsageMeter::class)->wouldExceedLimit($workspace)) {
+            $limit = $workspace->payeeLimit();
+
+            return back()->withErrors([
+                'email' => "Your plan is limited to {$limit} members. Upgrade your subscription or start a trial to add more.",
+            ]);
+        }
 
         // Attach an existing user, or create a fresh login with a temp password.
         $user = User::where('email', $data['email'])->first();
