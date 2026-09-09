@@ -4,8 +4,11 @@ use App\Http\Controllers\Admin\AliasController;
 use App\Http\Controllers\Admin\CalcRunController;
 use App\Http\Controllers\Admin\CalcRunReleaseController;
 use App\Http\Controllers\Admin\PlanController;
+use App\Http\Controllers\Admin\DisputeQueueController;
 use App\Http\Controllers\Admin\TransactionController;
 use App\Http\Controllers\Admin\TransactionImportController;
+use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\DisputeController;
 use App\Http\Controllers\ProfileController;
 use Illuminate\Support\Facades\Route;
 
@@ -13,14 +16,23 @@ Route::get('/', function () {
     return view('welcome');
 });
 
-Route::get('/dashboard', function () {
-    return view('dashboard');
-})->middleware(['auth', 'verified'])->name('dashboard');
+Route::get('/dashboard', [DashboardController::class, 'index'])
+    ->middleware(['auth', 'verified'])
+    ->name('dashboard');
 
 Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+
+    // Disputes — participants raise and follow their own; admins triage via the
+    // admin queue. Per-record access is enforced by DisputePolicy.
+    Route::get('/disputes', [DisputeController::class, 'index'])->name('disputes.index');
+    Route::get('/disputes/create', [DisputeController::class, 'create'])->name('disputes.create');
+    Route::post('/disputes', [DisputeController::class, 'store'])->name('disputes.store');
+    Route::get('/disputes/{dispute}', [DisputeController::class, 'show'])->name('disputes.show');
+    Route::post('/disputes/{dispute}/comments', [DisputeController::class, 'storeComment'])->name('disputes.comments.store');
+    Route::patch('/disputes/{dispute}/resolve', [DisputeController::class, 'resolve'])->name('disputes.resolve');
 });
 
 // Admin area — any workspace role except Participant. Per-record authorization
@@ -51,6 +63,9 @@ Route::middleware(['auth', 'workspace.admin'])
         Route::post('calc-runs/{calcRun}/credits/transition', [CalcRunReleaseController::class, 'transitionCredits'])->name('calc-runs.credits.transition');
         Route::get('calc-runs/{calcRun}/rewards', [CalcRunReleaseController::class, 'rewards'])->name('calc-runs.rewards.index');
         Route::post('calc-runs/{calcRun}/rewards/transition', [CalcRunReleaseController::class, 'transitionRewards'])->name('calc-runs.rewards.transition');
+
+        // Dispute triage queue.
+        Route::get('disputes', [DisputeQueueController::class, 'index'])->name('disputes.index');
     });
 
 require __DIR__.'/auth.php';
