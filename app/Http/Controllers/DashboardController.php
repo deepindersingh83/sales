@@ -4,12 +4,14 @@ namespace App\Http\Controllers;
 
 use App\Enums\DisputeStatus;
 use App\Enums\PayoutStatus;
+use App\Enums\RewardType;
 use App\Models\Announcement;
 use App\Models\CalcRun;
 use App\Models\Credit;
 use App\Models\Dispute;
 use App\Models\Plan;
 use App\Models\Reward;
+use App\Models\Survey;
 use App\Models\Transaction;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -65,12 +67,26 @@ class DashboardController extends Controller
             ->take(5)
             ->get();
 
+        // Recognition: released badge rewards for this rep.
+        $badges = Reward::released()
+            ->where('user_id', $userId)
+            ->where('reward_type', RewardType::Badge->value)
+            ->get();
+
+        // One active survey the rep hasn't answered yet.
+        $survey = Survey::where('is_active', true)
+            ->whereDoesntHave('responses', fn ($q) => $q->where('user_id', $userId))
+            ->latest()
+            ->first();
+
         return view('participant.dashboard', [
             'credits' => $credits,
             'rewards' => $rewards,
             'totalCredited' => $totalCredited,
             'totalPayout' => $totalPayout,
             'announcements' => $announcements,
+            'badges' => $badges,
+            'survey' => $survey,
         ]);
     }
 }

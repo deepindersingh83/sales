@@ -24,6 +24,37 @@
             <x-ui.stat label="Total payout (released)" :value="number_format($totalPayout, 2)" accent="green" />
         </div>
 
+        @if ($badges->isNotEmpty())
+            <x-ui.card>
+                <h2 class="text-sm font-semibold text-slate-800 mb-3">🏅 Your badges</h2>
+                <div class="flex flex-wrap gap-2">
+                    @foreach ($badges as $b)
+                        <span class="inline-flex items-center gap-1.5 rounded-full bg-amber-50 border border-amber-200 px-3 py-1 text-sm text-amber-800">🏅 {{ $b->meta['label'] ?? 'Badge' }}</span>
+                    @endforeach
+                </div>
+            </x-ui.card>
+        @endif
+
+        @if ($survey)
+            <x-ui.card>
+                <h2 class="text-sm font-semibold text-slate-800">{{ $survey->question }}</h2>
+                <form method="POST" action="{{ route('surveys.respond', $survey) }}" class="mt-3 flex flex-wrap items-end gap-3">
+                    @csrf
+                    <div>
+                        <x-input-label for="rating" value="Rating (1–5)" />
+                        <select id="rating" name="rating" class="mt-1 border-slate-300 rounded-lg shadow-sm text-sm" required>
+                            @for ($i = 5; $i >= 1; $i--)<option value="{{ $i }}">{{ $i }} — {{ str_repeat('★', $i) }}</option>@endfor
+                        </select>
+                    </div>
+                    <div class="flex-1 min-w-[12rem]">
+                        <x-input-label for="comment" value="Comment (optional)" />
+                        <x-text-input id="comment" name="comment" class="mt-1 block w-full" />
+                    </div>
+                    <x-ui.button>Submit</x-ui.button>
+                </form>
+            </x-ui.card>
+        @endif
+
         <x-ui.card padding="p-0">
             <div class="px-6 py-4 border-b border-slate-100"><h2 class="text-sm font-semibold text-slate-800">My payouts</h2></div>
             @forelse ($rewards as $reward)

@@ -14,10 +14,13 @@ use App\Http\Controllers\Admin\ReportController;
 use App\Http\Controllers\Admin\TransactionController;
 use App\Http\Controllers\Admin\TransactionImportController;
 use App\Http\Controllers\Admin\WorkspaceSettingsController;
+use App\Http\Controllers\Admin\ContestController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DisputeController;
 use App\Http\Controllers\EnrollmentController;
+use App\Http\Controllers\LeaderboardController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\SurveyController;
 use App\Http\Controllers\WorkspaceController;
 use Illuminate\Support\Facades\Route;
 
@@ -42,6 +45,10 @@ Route::middleware('auth')->group(function () {
     Route::get('/disputes/{dispute}', [DisputeController::class, 'show'])->name('disputes.show');
     Route::post('/disputes/{dispute}/comments', [DisputeController::class, 'storeComment'])->name('disputes.comments.store');
     Route::patch('/disputes/{dispute}/resolve', [DisputeController::class, 'resolve'])->name('disputes.resolve');
+
+    // Leaderboard (everyone) + survey responses (participants).
+    Route::get('/leaderboard', [LeaderboardController::class, 'index'])->name('leaderboard.index');
+    Route::post('/surveys/{survey}/respond', [SurveyController::class, 'respond'])->name('surveys.respond');
 
     // Plan enrollment with typed-name e-signature.
     Route::get('/enrollments', [EnrollmentController::class, 'index'])->name('enrollments.index');
@@ -101,6 +108,15 @@ Route::middleware(['auth', 'workspace.admin'])
 
         // Announcements (writers manage; reps see published ones on their dashboard).
         Route::resource('announcements', AnnouncementController::class)->except(['show']);
+
+        // Contests / leaderboards + surveys (engagement).
+        Route::get('contests', [ContestController::class, 'index'])->name('contests.index');
+        Route::post('contests', [ContestController::class, 'store'])->name('contests.store');
+        Route::get('contests/{contest}', [ContestController::class, 'show'])->name('contests.show');
+        Route::delete('contests/{contest}', [ContestController::class, 'destroy'])->name('contests.destroy');
+        Route::get('surveys', [SurveyController::class, 'index'])->name('surveys.index');
+        Route::post('surveys', [SurveyController::class, 'store'])->name('surveys.store');
+        Route::delete('surveys/{survey}', [SurveyController::class, 'destroy'])->name('surveys.destroy');
 
         // Workspace settings (Full Admin).
         Route::get('settings', [WorkspaceSettingsController::class, 'edit'])->name('settings.edit');
