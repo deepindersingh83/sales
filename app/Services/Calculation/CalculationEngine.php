@@ -25,6 +25,7 @@ class CalculationEngine
     public function __construct(
         protected TierCalculator $tierCalculator,
         protected AliasCreditingStrategy $strategy,
+        protected FormulaEvaluator $formula,
     ) {}
 
     /**
@@ -80,24 +81,20 @@ class CalculationEngine
             $commissionTotal = 0.0;
 
             foreach ($acc as $userId => $totals) {
-                $result = $this->tierCalculator->commission($tiers, $totals['attainment']);
+                $commission = $this->computeCommission($run, $userId, $snapshot, $tiers, $totals);
 
-                if ($result['total'] != 0.0) {
+                if ($commission['total'] != 0.0) {
                     Reward::create([
                         'calc_run_id' => $run->id,
                         'user_id' => $userId,
                         'plan_id' => $run->plan_id,
                         'reward_type' => RewardType::Commission->value,
-                        'computed_amount' => $result['total'],
+                        'computed_amount' => $commission['total'],
                         'currency' => $snapshot['plan']['currency'] ?? 'USD',
-                        'meta' => ['attainment' => $totals['attainment'], 'breakdown' => $result['breakdown']],
+                        'meta' => $commission['meta'],
                         'status' => 'pending',
                     ]);
-                    $commissionTotal += $result['total'];
-
-                    $this->log($run, 'tier_applied', null, $userId, 0.0, $result['total'],
-                        'Tiered commission on attainment '.round($totals['attainment'], 2).'.',
-                        ['attainment' => $totals['attainment'], 'breakdown' => $result['breakdown']]);
+                    $commissionTotal += $commission['total'];
                 }
 
                 $this->applyRewardRules($run, $userId, $totals, $rewardRules, $snapshot);
@@ -110,6 +107,65 @@ class CalculationEngine
                 'commission_total' => round($commissionTotal, 4),
             ];
         });
+    }
+
+    /**
+     * Compute one rep's commission: a custom formula when the plan defines one,
+     * otherwise tier math; then apply the payout cap. Logs each step.
+     *
+     * @param  array<int, array<string, mixed>>  $tiers
+     * @param  array{attainment:float, revenue:float, profit:float}  $totals
+     * @return array{total:float, meta:array<string, mixed>}
+     */
+    protected function computeCommission(CalcRun $run, int $userId, array $snapshot, array $tiers, array $totals): array
+    {
+        $plan = $snapshot['plan'];
+        $quota = isset($plan['quota']) ? (float) $plan['quota'] : null;
+        $attainmentPct = ($quota && $quota > 0) ? $totals['attainment'] / $quota : 0.0;
+
+        $meta = [
+            'attainment' => $totals['attainment'],
+            'quota' => $quota,
+            'attainment_pct' => round($attainmentPct, 6),
+        ];
+
+        $formula = $plan['commission_formula'] ?? null;
+
+        if (! empty($formula)) {
+            $total = $this->formula->evaluate($formula, [
+                'attainment' => $totals['attainment'],
+                'revenue' => $totals['revenue'],
+                'profit' => $totals['profit'],
+                'quota' => $quota ?? 0.0,
+                'attainment_pct' => $attainmentPct,
+                'rate' => 0.0,
+            ]);
+            $meta['method'] = 'formula';
+            $meta['formula'] = $formula;
+            $this->log($run, 'formula_applied', null, $userId, 0.0, $total,
+                "Custom formula on attainment {$totals['attainment']}.", $meta);
+        } else {
+            $result = $this->tierCalculator->commission($tiers, $totals['attainment']);
+            $total = $result['total'];
+            $meta['method'] = 'tiers';
+            $meta['breakdown'] = $result['breakdown'];
+            if ($total != 0.0) {
+                $this->log($run, 'tier_applied', null, $userId, 0.0, $total,
+                    'Tiered commission on attainment '.round($totals['attainment'], 2).'.', $meta);
+            }
+        }
+
+        // Payout cap.
+        $cap = isset($plan['payout_cap']) ? (float) $plan['payout_cap'] : null;
+        if ($cap !== null && $total > $cap) {
+            $this->log($run, 'cap_applied', null, $userId, $total, $cap,
+                "Payout capped at {$cap}.", ['uncapped' => $total, 'cap' => $cap]);
+            $meta['uncapped'] = round($total, 4);
+            $meta['capped'] = true;
+            $total = $cap;
+        }
+
+        return ['total' => round($total, 4), 'meta' => $meta];
     }
 
     /**

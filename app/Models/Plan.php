@@ -22,6 +22,9 @@ class Plan extends Model
         'end_date',
         'status',
         'performance_metric',
+        'quota',
+        'payout_cap',
+        'commission_formula',
         'currency',
     ];
 
@@ -31,6 +34,8 @@ class Plan extends Model
             'status' => PlanStatus::class,
             'start_date' => 'date',
             'end_date' => 'date',
+            'quota' => 'decimal:4',
+            'payout_cap' => 'decimal:4',
         ];
     }
 

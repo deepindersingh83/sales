@@ -4,6 +4,7 @@ namespace App\Http\Requests;
 
 use App\Enums\PlanStatus;
 use App\Enums\RewardType;
+use App\Services\Calculation\FormulaEvaluator;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -28,6 +29,15 @@ class PlanRequest extends FormRequest
             'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
             'status' => ['required', Rule::enum(PlanStatus::class)],
             'performance_metric' => ['required', Rule::in(['revenue', 'profit', 'custom'])],
+            'quota' => ['nullable', 'numeric', 'min:0'],
+            'payout_cap' => ['nullable', 'numeric', 'min:0'],
+            'commission_formula' => ['nullable', 'string', 'max:500', function ($attr, $value, $fail) {
+                if ($value && ! app(FormulaEvaluator::class)->isValid($value, [
+                    'attainment' => 1, 'revenue' => 1, 'profit' => 1, 'quota' => 1, 'attainment_pct' => 1, 'rate' => 1,
+                ])) {
+                    $fail('The commission formula is not valid.');
+                }
+            }],
             'currency' => ['required', 'string', 'size:3'],
 
             'tiers' => ['array'],

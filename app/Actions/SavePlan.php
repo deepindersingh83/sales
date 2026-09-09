@@ -24,6 +24,9 @@ class SavePlan
                 'end_date' => $data['end_date'] ?? null,
                 'status' => $data['status'],
                 'performance_metric' => $data['performance_metric'],
+                'quota' => $data['quota'] ?? null,
+                'payout_cap' => $data['payout_cap'] ?? null,
+                'commission_formula' => $data['commission_formula'] ?? null,
                 'currency' => strtoupper($data['currency']),
             ])->save();
 

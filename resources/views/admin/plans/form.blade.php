@@ -84,6 +84,31 @@
                 </div>
             </div>
 
+            {{-- Advanced mechanics --}}
+            <div class="bg-white shadow-sm sm:rounded-lg p-6 space-y-4">
+                <h3 class="text-lg font-medium text-gray-900">Advanced</h3>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <x-input-label for="quota" value="Quota (target attainment)" />
+                        <x-text-input id="quota" name="quota" type="number" step="0.01" min="0" class="block mt-1 w-full" :value="old('quota', $plan->quota)" />
+                        <p class="mt-1 text-xs text-gray-500">Used to compute attainment % (available as <code>attainment_pct</code> in formulas).</p>
+                    </div>
+                    <div>
+                        <x-input-label for="payout_cap" value="Payout cap (max commission per rep)" />
+                        <x-text-input id="payout_cap" name="payout_cap" type="number" step="0.01" min="0" class="block mt-1 w-full" :value="old('payout_cap', $plan->payout_cap)" />
+                    </div>
+                </div>
+                <div>
+                    <x-input-label for="commission_formula" value="Custom commission formula (optional)" />
+                    <x-text-input id="commission_formula" name="commission_formula" class="block mt-1 w-full font-mono" :value="old('commission_formula', $plan->commission_formula)" placeholder="e.g. revenue * 0.05 + max(0, attainment_pct - 1) * 1000" />
+                    <x-input-error :messages="$errors->get('commission_formula')" class="mt-2" />
+                    <p class="mt-1 text-xs text-gray-500">
+                        When set, this replaces tier math. Variables: <code>attainment</code>, <code>revenue</code>, <code>profit</code>,
+                        <code>quota</code>, <code>attainment_pct</code>. Functions: <code>min</code>, <code>max</code>. The payout cap still applies.
+                    </p>
+                </div>
+            </div>
+
             {{-- Tiers --}}
             <div class="bg-white shadow-sm sm:rounded-lg p-6">
                 <div class="flex items-center justify-between mb-4">

@@ -26,6 +26,9 @@ class PlanSnapshot
                 'start_date' => optional($plan->start_date)->toDateString(),
                 'end_date' => optional($plan->end_date)->toDateString(),
                 'performance_metric' => $plan->performance_metric,
+                'quota' => $plan->quota !== null ? (float) $plan->quota : null,
+                'payout_cap' => $plan->payout_cap !== null ? (float) $plan->payout_cap : null,
+                'commission_formula' => $plan->commission_formula,
                 'currency' => $plan->currency,
             ],
             'tiers' => $plan->tiers->map(fn ($t) => [

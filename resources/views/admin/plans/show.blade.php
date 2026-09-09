@@ -39,7 +39,16 @@
                 <div><dt class="text-gray-500">Period</dt><dd class="font-medium capitalize">{{ $plan->period_type }}</dd></div>
                 <div><dt class="text-gray-500">Metric</dt><dd class="font-medium capitalize">{{ $plan->performance_metric }}</dd></div>
                 <div><dt class="text-gray-500">Currency</dt><dd class="font-medium">{{ $plan->currency }}</dd></div>
+                @if ($plan->quota !== null)<div><dt class="text-gray-500">Quota</dt><dd class="font-medium">{{ number_format((float) $plan->quota, 2) }}</dd></div>@endif
+                @if ($plan->payout_cap !== null)<div><dt class="text-gray-500">Payout cap</dt><dd class="font-medium">{{ number_format((float) $plan->payout_cap, 2) }}</dd></div>@endif
             </dl>
+            @if ($plan->commission_formula)
+                <div class="mt-4 text-sm">
+                    <span class="text-gray-500">Formula:</span>
+                    <code class="ml-1 px-2 py-0.5 bg-gray-100 rounded">{{ $plan->commission_formula }}</code>
+                    <span class="text-gray-400">(replaces tier math)</span>
+                </div>
+            @endif
             @if ($plan->description)
                 <p class="mt-4 text-sm text-gray-600">{{ $plan->description }}</p>
             @endif
