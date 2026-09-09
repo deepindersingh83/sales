@@ -45,6 +45,14 @@ php artisan test
 php artisan serve   # + `php artisan queue:work` for calculations
 ```
 
+## Deployment
+
+See `DEPLOYMENT.md` for CloudPanel/LEMP steps. The most common fresh-deploy 500
+is `storage/` not being writable by the PHP-FPM user (Blade can't compile views;
+PHP 8.4 reports it via a `tempnam()` notice) — fix ownership/permissions on
+`storage` and `bootstrap/cache`, and keep `APP_DEBUG=false` in production. A
+queue worker (`php artisan queue:work`) is required for calculation runs.
+
 ## Build phasing
 
 The MVP (product Phase 1) is delivered in build milestones — see `DECISIONS.md` and the
