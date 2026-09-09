@@ -78,6 +78,7 @@
             <x-ui.nav-item :href="route('admin.settings.edit')" :active="request()->routeIs('admin.settings.*')" :icon="$ico['calc']">Settings</x-ui.nav-item>
         @endif
     @else
+        <x-ui.nav-item :href="route('my.team')" :active="request()->routeIs('my.team')" :icon="$ico['team']">My team</x-ui.nav-item>
         <x-ui.nav-item :href="route('leaderboard.index')" :active="request()->routeIs('leaderboard.*')" :icon="$ico['report']">Leaderboard</x-ui.nav-item>
         <x-ui.nav-item :href="route('enrollments.index')" :active="request()->routeIs('enrollments.*')" :icon="$ico['plans']">Plans &amp; terms</x-ui.nav-item>
         <x-ui.nav-item :href="route('disputes.index')" :active="request()->routeIs('disputes.*')" :icon="$ico['dispute']">My disputes</x-ui.nav-item>

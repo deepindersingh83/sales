@@ -60,6 +60,30 @@ class DisputeController extends Controller
         return redirect()->route('disputes.show', $dispute)->with('status', 'Dispute submitted.');
     }
 
+    /** Claim a transaction the rep believes should be credited to them. */
+    public function claim(Request $request): RedirectResponse
+    {
+        Gate::authorize('create', Dispute::class);
+
+        $data = $request->validate([
+            'external_id' => ['required', 'string', 'max:255'],
+            'note' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $transaction = Transaction::where('external_id', $data['external_id'])->first();
+
+        $dispute = Dispute::create([
+            'user_id' => $request->user()->id,
+            'category' => 'Transaction claim',
+            'description' => 'Claiming transaction '.$data['external_id'].'. '.($data['note'] ?? ''),
+            'transaction_id' => $transaction?->id,
+            'status' => DisputeStatus::Open,
+        ]);
+
+        return redirect()->route('disputes.show', $dispute)->with('status',
+            $transaction ? 'Claim submitted for review.' : 'Claim submitted — that transaction id was not found, an admin will check.');
+    }
+
     public function show(Dispute $dispute): View
     {
         Gate::authorize('view', $dispute);

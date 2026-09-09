@@ -2,6 +2,7 @@
     <x-slot name="header">
         <x-ui.page-header title="My statement" subtitle="Your released credits and payouts">
             <x-slot name="actions">
+                <x-ui.button href="{{ route('my.statement') }}" variant="secondary">Download statement</x-ui.button>
                 <x-ui.button href="{{ route('disputes.create') }}" variant="secondary">Raise a dispute</x-ui.button>
             </x-slot>
         </x-ui.page-header>

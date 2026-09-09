@@ -20,6 +20,7 @@ use App\Http\Controllers\DisputeController;
 use App\Http\Controllers\EnrollmentController;
 use App\Http\Controllers\LeaderboardController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\RepController;
 use App\Http\Controllers\SurveyController;
 use App\Http\Controllers\WorkspaceController;
 use Illuminate\Support\Facades\Route;
@@ -45,6 +46,11 @@ Route::middleware('auth')->group(function () {
     Route::get('/disputes/{dispute}', [DisputeController::class, 'show'])->name('disputes.show');
     Route::post('/disputes/{dispute}/comments', [DisputeController::class, 'storeComment'])->name('disputes.comments.store');
     Route::patch('/disputes/{dispute}/resolve', [DisputeController::class, 'resolve'])->name('disputes.resolve');
+    Route::post('/disputes/claim', [DisputeController::class, 'claim'])->name('disputes.claim');
+
+    // Rep extras: statement download + manager/team view.
+    Route::get('/my/statement', [RepController::class, 'statement'])->name('my.statement');
+    Route::get('/my/team', [RepController::class, 'team'])->name('my.team');
 
     // Leaderboard (everyone) + survey responses (participants).
     Route::get('/leaderboard', [LeaderboardController::class, 'index'])->name('leaderboard.index');
