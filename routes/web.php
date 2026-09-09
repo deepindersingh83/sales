@@ -80,6 +80,8 @@ Route::middleware(['auth', 'workspace.admin'])
 
         // Transactions + CSV import.
         Route::get('transactions', [TransactionController::class, 'index'])->name('transactions.index');
+        Route::post('transactions/{transaction}/exclude', [TransactionController::class, 'toggleExclude'])->name('transactions.exclude');
+        Route::post('transactions/{transaction}/paid', [TransactionController::class, 'togglePaid'])->name('transactions.paid');
         Route::get('imports', [TransactionImportController::class, 'create'])->name('imports.create');
         Route::post('imports/preview', [TransactionImportController::class, 'preview'])->name('imports.preview');
         Route::post('imports', [TransactionImportController::class, 'store'])->name('imports.store');
@@ -95,6 +97,7 @@ Route::middleware(['auth', 'workspace.admin'])
         Route::get('calc-runs/{calcRun}', [CalcRunController::class, 'show'])->name('calc-runs.show');
         Route::get('calc-runs/{calcRun}/status', [CalcRunController::class, 'status'])->name('calc-runs.status');
         Route::get('calc-runs/{calcRun}/logs', [CalcRunController::class, 'logs'])->name('calc-runs.logs');
+        Route::post('calc-runs/{calcRun}/approve', [CalcRunController::class, 'approve'])->name('calc-runs.approve');
 
         // Two-stage review/release pipeline for a run's credits and rewards.
         Route::get('calc-runs/{calcRun}/credits', [CalcRunReleaseController::class, 'credits'])->name('calc-runs.credits.index');

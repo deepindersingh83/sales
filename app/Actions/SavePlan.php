@@ -27,6 +27,7 @@ class SavePlan
                 'tax_rate_percent' => $data['tax_rate_percent'] ?? null,
                 'filter_field' => $data['filter_field'] ?? null,
                 'filter_value' => $data['filter_value'] ?? null,
+                'pay_when_paid' => (bool) ($data['pay_when_paid'] ?? false),
                 'quota' => $data['quota'] ?? null,
                 'payout_cap' => $data['payout_cap'] ?? null,
                 'commission_formula' => $data['commission_formula'] ?? null,

@@ -23,6 +23,8 @@ class CalcRun extends Model
         'error',
         'started_at',
         'completed_at',
+        'approved_at',
+        'approved_by_user_id',
         'triggered_by_user_id',
     ];
 
@@ -33,6 +35,7 @@ class CalcRun extends Model
             'is_simulation' => 'boolean',
             'started_at' => 'datetime',
             'completed_at' => 'datetime',
+            'approved_at' => 'datetime',
         ];
     }
 

@@ -32,6 +32,7 @@ class PlanRequest extends FormRequest
             'tax_rate_percent' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'filter_field' => ['nullable', 'string', 'max:255'],
             'filter_value' => ['nullable', 'string', 'max:255'],
+            'pay_when_paid' => ['nullable', 'boolean'],
             'quota' => ['nullable', 'numeric', 'min:0'],
             'payout_cap' => ['nullable', 'numeric', 'min:0'],
             'commission_formula' => ['nullable', 'string', 'max:500', function ($attr, $value, $fail) {

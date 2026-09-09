@@ -44,11 +44,26 @@
         </div>
 
         <div class="bg-white shadow-sm sm:rounded-lg p-6">
-            <h3 class="text-sm font-medium text-gray-900 mb-2">Review &amp; release</h3>
+            <h3 class="text-sm font-medium text-gray-900 mb-2">Review, approve &amp; release</h3>
             <p class="text-sm text-gray-600">
                 Credits and rewards start as <strong>pending</strong> and are hidden from reps until released.
-                Once this run completes, use the review screens to move them pending → reviewed → released.
+                A run must be <strong>approved</strong> before anything can be released.
             </p>
+            @if ($errors->has('approval'))
+                <div class="mt-2 text-sm text-rose-700">{{ $errors->first('approval') }}</div>
+            @endif
+            <div class="mt-3">
+                @if ($run->approved_at)
+                    <span class="inline-flex items-center gap-1.5 text-sm text-emerald-700">✓ Approved {{ $run->approved_at->diffForHumans() }}</span>
+                @else
+                    @can('release', $run)
+                        <form method="POST" action="{{ route('admin.calc-runs.approve', $run) }}" x-show="status === 'completed'">
+                            @csrf
+                            <button class="inline-flex items-center px-4 py-2 bg-brand-600 text-white text-sm font-medium rounded-md hover:bg-brand-700">Approve run</button>
+                        </form>
+                    @endcan
+                @endif
+            </div>
             @if (Route::has('admin.calc-runs.credits.index'))
                 <div class="mt-3 flex gap-4 text-sm" x-show="status === 'completed'">
                     <a href="{{ route('admin.calc-runs.credits.index', $run) }}" class="text-indigo-600 hover:text-indigo-900">Review credits →</a>

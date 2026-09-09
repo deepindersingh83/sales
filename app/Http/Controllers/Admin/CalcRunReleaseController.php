@@ -95,6 +95,11 @@ class CalcRunReleaseController extends Controller
             'ids.*' => ['integer'],
         ]);
 
+        // Approval gate: a run must be approved before anything is released.
+        if ($data['action'] === 'release' && $calcRun->approved_at === null) {
+            return back()->withErrors(['approval' => 'This run must be approved before release.']);
+        }
+
         $relation = $type === 'credits' ? $calcRun->credits() : $calcRun->rewards();
 
         $query = $relation->getQuery()->clone();

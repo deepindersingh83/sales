@@ -25,6 +25,7 @@ class Plan extends Model
         'tax_rate_percent',
         'filter_field',
         'filter_value',
+        'pay_when_paid',
         'quota',
         'payout_cap',
         'commission_formula',
@@ -40,6 +41,7 @@ class Plan extends Model
             'end_date' => 'date',
             'quota' => 'decimal:4',
             'payout_cap' => 'decimal:4',
+            'pay_when_paid' => 'boolean',
         ];
     }
 

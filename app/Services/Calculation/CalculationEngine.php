@@ -356,7 +356,12 @@ class CalculationEngine
      */
     protected function transactionsFor(CalcRun $run, array $snapshot)
     {
-        $query = Transaction::query();
+        $query = Transaction::query()->where('excluded', false);
+
+        // Pay-when-you-get-paid: only credit transactions marked paid.
+        if (! empty($snapshot['plan']['pay_when_paid'])) {
+            $query->where('is_paid', true);
+        }
 
         $period = $snapshot['plan']['period_type'] ?? null;
         $start = $snapshot['plan']['start_date'] ?? null;

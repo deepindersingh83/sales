@@ -27,17 +27,28 @@
                             <th class="px-6 py-3">Source</th>
                             <th class="px-6 py-3">Date</th>
                             <th class="px-6 py-3 text-right">Amount</th>
-                            <th class="px-6 py-3 text-right">Profit</th>
+                            <th class="px-6 py-3">Status</th>
+                            <th class="px-6 py-3"></th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-200 text-sm">
                         @foreach ($transactions as $tx)
-                            <tr>
+                            <tr class="{{ $tx->excluded ? 'opacity-50' : '' }}">
                                 <td class="px-6 py-4 font-mono text-gray-900">{{ $tx->external_id }}</td>
                                 <td class="px-6 py-4 text-gray-500">{{ $tx->source_system }}</td>
                                 <td class="px-6 py-4 text-gray-500">{{ optional($tx->transaction_date)->toDateString() ?? '—' }}</td>
                                 <td class="px-6 py-4 text-right">{{ $tx->currency }} {{ number_format((float) $tx->amount, 2) }}</td>
-                                <td class="px-6 py-4 text-right text-gray-500">{{ $tx->profit_amount !== null ? number_format((float) $tx->profit_amount, 2) : '—' }}</td>
+                                <td class="px-6 py-4 space-x-1">
+                                    @if ($tx->excluded)<x-ui.badge color="rose">Excluded</x-ui.badge>@endif
+                                    @if (! $tx->is_paid)<x-ui.badge color="amber">Unpaid</x-ui.badge>@endif
+                                    @if (! $tx->excluded && $tx->is_paid)<x-ui.badge color="green">Active</x-ui.badge>@endif
+                                </td>
+                                <td class="px-6 py-4 text-right space-x-2 whitespace-nowrap">
+                                    @can('update', $tx)
+                                        <form method="POST" action="{{ route('admin.transactions.exclude', $tx) }}" class="inline">@csrf<button class="text-xs text-slate-500 hover:text-slate-800">{{ $tx->excluded ? 'Include' : 'Exclude' }}</button></form>
+                                        <form method="POST" action="{{ route('admin.transactions.paid', $tx) }}" class="inline">@csrf<button class="text-xs text-slate-500 hover:text-slate-800">{{ $tx->is_paid ? 'Mark unpaid' : 'Mark paid' }}</button></form>
+                                    @endcan
+                                </td>
                             </tr>
                         @endforeach
                     </tbody>

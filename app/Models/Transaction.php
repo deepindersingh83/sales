@@ -21,6 +21,8 @@ class Transaction extends Model
         'profit_amount',
         'currency',
         'transaction_date',
+        'excluded',
+        'is_paid',
     ];
 
     protected function casts(): array
@@ -30,6 +32,8 @@ class Transaction extends Model
             'amount' => 'decimal:4',
             'profit_amount' => 'decimal:4',
             'transaction_date' => 'date',
+            'excluded' => 'boolean',
+            'is_paid' => 'boolean',
         ];
     }
 

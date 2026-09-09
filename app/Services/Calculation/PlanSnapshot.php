@@ -29,6 +29,7 @@ class PlanSnapshot
                 'tax_rate_percent' => $plan->tax_rate_percent !== null ? (float) $plan->tax_rate_percent : null,
                 'filter_field' => $plan->filter_field,
                 'filter_value' => $plan->filter_value,
+                'pay_when_paid' => (bool) $plan->pay_when_paid,
                 'quota' => $plan->quota !== null ? (float) $plan->quota : null,
                 'payout_cap' => $plan->payout_cap !== null ? (float) $plan->payout_cap : null,
                 'commission_formula' => $plan->commission_formula,

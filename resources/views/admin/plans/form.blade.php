@@ -118,6 +118,11 @@
                         <x-text-input id="filter_value" name="filter_value" class="block mt-1 w-full" :value="old('filter_value', $plan->filter_value)" placeholder="e.g. North" />
                     </div>
                 </div>
+                <label class="flex items-center gap-2 text-sm">
+                    <input type="hidden" name="pay_when_paid" value="0" />
+                    <input type="checkbox" name="pay_when_paid" value="1" @checked(old('pay_when_paid', $plan->pay_when_paid)) class="rounded border-gray-300 text-indigo-600" />
+                    <span class="text-gray-700">Pay when paid — only credit transactions marked as paid</span>
+                </label>
                 <div>
                     <x-input-label for="commission_formula" value="Custom commission formula (optional)" />
                     <x-text-input id="commission_formula" name="commission_formula" class="block mt-1 w-full font-mono" :value="old('commission_formula', $plan->commission_formula)" placeholder="e.g. revenue * 0.05 + max(0, attainment_pct - 1) * 1000" />

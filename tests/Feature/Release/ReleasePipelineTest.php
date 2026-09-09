@@ -32,7 +32,12 @@ class ReleasePipelineTest extends TestCase
         Alias::create(['workspace_id' => $ws->id, 'user_id' => $rep->id, 'alias_value' => 'Alice', 'match_field' => 'rep', 'match_type' => 'exact']);
         Transaction::create(['workspace_id' => $ws->id, 'external_id' => 'T1', 'source_system' => 'csv', 'amount' => 1000, 'currency' => 'USD', 'transaction_date' => '2026-03-01', 'raw_data' => ['rep' => 'Alice']]);
 
-        return app(StartCalcRun::class)->handle($plan, $trigger?->id);
+        $run = app(StartCalcRun::class)->handle($plan, $trigger?->id);
+        // Pre-approve so these tests exercise the release pipeline itself (the
+        // approval gate is covered separately in CalcControlsTest).
+        $run->update(['approved_at' => now()]);
+
+        return $run;
     }
 
     public function test_credits_progress_pending_to_reviewed_to_released(): void

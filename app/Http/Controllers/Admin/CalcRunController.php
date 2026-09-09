@@ -39,6 +39,19 @@ class CalcRunController extends Controller
             ->with('status', 'Calculation queued. This page refreshes as it runs.');
     }
 
+    /** Approve a completed run so its rewards may be released. */
+    public function approve(CalcRun $calcRun): RedirectResponse
+    {
+        Gate::authorize('release', $calcRun);
+
+        $calcRun->update([
+            'approved_at' => now(),
+            'approved_by_user_id' => request()->user()->id,
+        ]);
+
+        return back()->with('status', 'Run approved — rewards can now be released.');
+    }
+
     /** Trigger a true-up run — pays the delta vs already-released commission. */
     public function trueUp(Plan $plan, StartCalcRun $starter): RedirectResponse
     {
