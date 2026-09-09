@@ -75,4 +75,44 @@ class User extends Authenticatable
 
         return $current !== null && in_array($current, $roles, true);
     }
+
+    // --- Plan-scoped authorization helpers (used by policies) ---------------
+
+    /**
+     * May this user administer (edit/run) the given plan in the current
+     * workspace? Full Admins can; Plan Admins only for assigned plans.
+     */
+    public function administersPlan(Plan $plan): bool
+    {
+        $role = $this->currentRole();
+
+        if ($role === Role::FullAdmin) {
+            return true;
+        }
+
+        if ($role === Role::PlanAdmin) {
+            return $plan->assignedAdmins()
+                ->where('users.id', $this->id)
+                ->exists();
+        }
+
+        return false;
+    }
+
+    /**
+     * May this user view the given plan's admin data? Full Admins and Plan
+     * Admins (assigned) can; Limited Admins can unless the plan is hidden from
+     * them; Participants cannot browse plan config.
+     */
+    public function canViewPlan(Plan $plan): bool
+    {
+        $role = $this->currentRole();
+
+        return match ($role) {
+            Role::FullAdmin => true,
+            Role::PlanAdmin => $this->administersPlan($plan),
+            Role::LimitedAdmin => ! $plan->hiddenFromUsers()->where('users.id', $this->id)->exists(),
+            default => false,
+        };
+    }
 }
