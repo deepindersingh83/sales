@@ -15,10 +15,26 @@ class CsvImportTest extends TestCase
 {
     use RefreshDatabase;
 
+    /** @var array<int, string> */
+    private array $tempFiles = [];
+
+    protected function tearDown(): void
+    {
+        foreach ($this->tempFiles as $path) {
+            @unlink($path);
+        }
+        $this->tempFiles = [];
+
+        parent::tearDown();
+    }
+
     private function writeCsv(string $contents): string
     {
-        $path = tempnam(sys_get_temp_dir(), 'csv').'.csv';
+        // Build a unique path directly rather than via tempnam(), which emits a
+        // warning under PHP 8.4 when the file lands in the system temp dir.
+        $path = sys_get_temp_dir().'/csv_import_test_'.bin2hex(random_bytes(8)).'.csv';
         file_put_contents($path, $contents);
+        $this->tempFiles[] = $path;
 
         return $path;
     }
