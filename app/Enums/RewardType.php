@@ -6,6 +6,7 @@ enum RewardType: string
 {
     case Commission = 'commission';
     case Override = 'override';
+    case Adjustment = 'adjustment';
     case CashFixed = 'cash_fixed';
     case CashPctRevenue = 'cash_pct_revenue';
     case CashPctProfit = 'cash_pct_profit';
@@ -20,6 +21,7 @@ enum RewardType: string
         return match ($this) {
             self::Commission => 'Commission',
             self::Override => 'Manager override',
+            self::Adjustment => 'Manual adjustment',
             self::CashFixed => 'Fixed cash',
             self::CashPctRevenue => 'Cash % of revenue',
             self::CashPctProfit => 'Cash % of profit',
@@ -39,6 +41,7 @@ enum RewardType: string
         return in_array($this, [
             self::Commission,
             self::Override,
+            self::Adjustment,
             self::CashFixed,
             self::CashPctRevenue,
             self::CashPctProfit,

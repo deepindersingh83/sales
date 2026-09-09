@@ -3,13 +3,16 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Enums\PayoutStatus;
+use App\Enums\RewardType;
 use App\Http\Controllers\Controller;
 use App\Models\CalcRun;
+use App\Models\Workspace;
 use App\Services\Calculation\PayoutPipeline;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 /**
@@ -41,6 +44,34 @@ class CalcRunReleaseController extends Controller
             'rewards' => $calcRun->rewards()->with(['user', 'plan'])->orderBy('user_id')->get(),
             'counts' => $this->counts($calcRun->rewards()),
         ]);
+    }
+
+    /** Add a manual reward adjustment (positive or negative) to a run. */
+    public function storeAdjustment(Request $request, CalcRun $calcRun): RedirectResponse
+    {
+        Gate::authorize('release', $calcRun);
+
+        $memberIds = Workspace::withoutGlobalScopes()
+            ->findOrFail($calcRun->workspace_id)
+            ->users()->pluck('users.id')->all();
+
+        $data = $request->validate([
+            'user_id' => ['required', 'integer', Rule::in($memberIds)],
+            'amount' => ['required', 'numeric'],
+            'reason' => ['required', 'string', 'max:255'],
+        ]);
+
+        $calcRun->rewards()->create([
+            'user_id' => $data['user_id'],
+            'plan_id' => $calcRun->plan_id,
+            'reward_type' => RewardType::Adjustment->value,
+            'computed_amount' => round((float) $data['amount'], 4),
+            'currency' => $calcRun->plan->currency ?? 'USD',
+            'meta' => ['reason' => $data['reason'], 'created_by' => $request->user()->id],
+            'status' => PayoutStatus::Pending->value,
+        ]);
+
+        return redirect()->route('admin.calc-runs.rewards.index', $calcRun)->with('status', 'Adjustment added.');
     }
 
     public function transitionCredits(Request $request, CalcRun $calcRun): RedirectResponse

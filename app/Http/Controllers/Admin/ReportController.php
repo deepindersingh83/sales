@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Services\DoublePaymentDetector;
 use App\Services\Reporting\ReportBuilder;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -11,6 +12,11 @@ use Symfony\Component\HttpFoundation\StreamedResponse as BaseStreamedResponse;
 class ReportController extends Controller
 {
     public function __construct(protected ReportBuilder $reports) {}
+
+    public function doublePayments(DoublePaymentDetector $detector): View
+    {
+        return view('admin.reports.double_payments', ['suspects' => $detector->suspects()]);
+    }
 
     public function index(): View
     {

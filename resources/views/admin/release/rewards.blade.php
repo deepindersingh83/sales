@@ -13,6 +13,32 @@
 
         @include('admin.release._pipeline', ['transitionRoute' => route('admin.calc-runs.rewards.transition', $run)])
 
+        @can('release', $run)
+            <div class="bg-white shadow-sm sm:rounded-lg p-6" x-data="{ open: false }">
+                <button @click="open = !open" class="text-sm font-medium text-brand-600 hover:text-brand-700">+ Add manual adjustment</button>
+                <form x-show="open" x-cloak method="POST" action="{{ route('admin.calc-runs.adjustments.store', $run) }}" class="mt-3 grid grid-cols-1 sm:grid-cols-4 gap-3 items-end">
+                    @csrf
+                    <div>
+                        <x-input-label for="adj_user" value="Rep" />
+                        <select id="adj_user" name="user_id" class="mt-1 block w-full border-slate-300 rounded-lg shadow-sm text-sm" required>
+                            @foreach ($rewards->pluck('user')->filter()->unique('id') as $u)
+                                <option value="{{ $u->id }}">{{ $u->name }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div>
+                        <x-input-label for="adj_amount" value="Amount (+/-)" />
+                        <x-text-input id="adj_amount" name="amount" type="number" step="0.01" class="mt-1 block w-full" required />
+                    </div>
+                    <div>
+                        <x-input-label for="adj_reason" value="Reason" />
+                        <x-text-input id="adj_reason" name="reason" class="mt-1 block w-full" required />
+                    </div>
+                    <x-ui.button>Add</x-ui.button>
+                </form>
+            </div>
+        @endcan
+
         <div class="bg-white shadow-sm sm:rounded-lg overflow-hidden">
             @if ($rewards->isEmpty())
                 <p class="p-6 text-gray-500">No rewards in this run.</p>

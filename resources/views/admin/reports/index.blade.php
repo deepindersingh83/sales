@@ -24,6 +24,10 @@
                 <div class="text-lg font-medium text-gray-900">Crediting by product/customer</div>
                 <p class="mt-1 text-sm text-gray-500">Released credited amount grouped by a transaction field.</p>
             </a>
+            <a href="{{ route('admin.reports.double-payments') }}" class="block bg-white shadow-sm sm:rounded-lg p-6 hover:bg-gray-50">
+                <div class="text-lg font-medium text-gray-900">Double-payment detection</div>
+                <p class="mt-1 text-sm text-gray-500">Transactions with matching amount + date — possible duplicates.</p>
+            </a>
         </div>
     </div>
 </x-app-layout>

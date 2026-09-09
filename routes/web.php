@@ -85,6 +85,7 @@ Route::middleware(['auth', 'workspace.admin'])
         Route::post('calc-runs/{calcRun}/credits/transition', [CalcRunReleaseController::class, 'transitionCredits'])->name('calc-runs.credits.transition');
         Route::get('calc-runs/{calcRun}/rewards', [CalcRunReleaseController::class, 'rewards'])->name('calc-runs.rewards.index');
         Route::post('calc-runs/{calcRun}/rewards/transition', [CalcRunReleaseController::class, 'transitionRewards'])->name('calc-runs.rewards.transition');
+        Route::post('calc-runs/{calcRun}/adjustments', [CalcRunReleaseController::class, 'storeAdjustment'])->name('calc-runs.adjustments.store');
 
         // Dispute triage queue.
         Route::get('disputes', [DisputeQueueController::class, 'index'])->name('disputes.index');
@@ -101,6 +102,7 @@ Route::middleware(['auth', 'workspace.admin'])
         Route::get('reports/payout-by-user', [ReportController::class, 'payoutByUser'])->name('reports.payout-by-user');
         Route::get('reports/payout-by-plan', [ReportController::class, 'payoutByPlan'])->name('reports.payout-by-plan');
         Route::get('reports/crediting', [ReportController::class, 'crediting'])->name('reports.crediting');
+        Route::get('reports/double-payments', [ReportController::class, 'doublePayments'])->name('reports.double-payments');
     });
 
 require __DIR__.'/auth.php';
