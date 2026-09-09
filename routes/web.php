@@ -3,8 +3,9 @@
 use App\Http\Controllers\Admin\AliasController;
 use App\Http\Controllers\Admin\CalcRunController;
 use App\Http\Controllers\Admin\CalcRunReleaseController;
-use App\Http\Controllers\Admin\PlanController;
 use App\Http\Controllers\Admin\DisputeQueueController;
+use App\Http\Controllers\Admin\PlanController;
+use App\Http\Controllers\Admin\ReportController;
 use App\Http\Controllers\Admin\TransactionController;
 use App\Http\Controllers\Admin\TransactionImportController;
 use App\Http\Controllers\DashboardController;
@@ -66,6 +67,12 @@ Route::middleware(['auth', 'workspace.admin'])
 
         // Dispute triage queue.
         Route::get('disputes', [DisputeQueueController::class, 'index'])->name('disputes.index');
+
+        // Built-in reports (with ?export=csv).
+        Route::get('reports', [ReportController::class, 'index'])->name('reports.index');
+        Route::get('reports/payout-by-user', [ReportController::class, 'payoutByUser'])->name('reports.payout-by-user');
+        Route::get('reports/payout-by-plan', [ReportController::class, 'payoutByPlan'])->name('reports.payout-by-plan');
+        Route::get('reports/crediting', [ReportController::class, 'crediting'])->name('reports.crediting');
     });
 
 require __DIR__.'/auth.php';

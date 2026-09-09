@@ -49,6 +49,13 @@ running `DECISIONS.md`.
   `reward_rules` produce additional cash/non-cash rewards. `cash_pct_salary` records a note (no
   salary data model in MVP).
 
+- **D9 — Reports scope.** The three built-in reports (payout by user, payout by plan, crediting
+  by product/customer) aggregate **released** data only — the final numbers reps and finance see —
+  with CSV export. The crediting report groups by any `raw_data` field present on the credited
+  transactions (default `product`).
+- **D10 — Reward-rule percentage values.** `cash_pct_*` reward-rule values are stored as fractions
+  (e.g. `0.02` = 2%), consistent with tier rates.
+
 ## Open items / deferred (Phase 2, not built)
 
 - Multi-currency + live FX (schema built now, single-currency behavior only).

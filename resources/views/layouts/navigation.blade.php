@@ -31,6 +31,9 @@
                         <x-nav-link :href="route('admin.disputes.index')" :active="request()->routeIs('admin.disputes.*')">
                             {{ __('Disputes') }}
                         </x-nav-link>
+                        <x-nav-link :href="route('admin.reports.index')" :active="request()->routeIs('admin.reports.*')">
+                            {{ __('Reports') }}
+                        </x-nav-link>
                     @else
                         <x-nav-link :href="route('disputes.index')" :active="request()->routeIs('disputes.*')">
                             {{ __('My disputes') }}
