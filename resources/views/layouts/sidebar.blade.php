@@ -19,10 +19,18 @@
     ];
 @endphp
 
-{{-- Brand --}}
+{{-- Brand (white-labelled per workspace when configured) --}}
+@php
+    $brandColor = $workspace?->brand_color;
+    $brandLabel = $workspace?->brand_name ?: config('branding.name');
+@endphp
 <div class="h-16 flex items-center gap-2.5 px-5 border-b border-slate-200">
-    <span class="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-brand-600 text-white font-bold">₡</span>
-    <span class="font-semibold text-slate-800 truncate">{{ config('branding.name') }}</span>
+    @if ($workspace?->logo_url)
+        <img src="{{ $workspace->logo_url }}" alt="{{ $brandLabel }}" class="h-8 w-8 rounded-lg object-cover" />
+    @else
+        <span class="inline-flex h-8 w-8 items-center justify-center rounded-lg text-white font-bold" style="background-color: {{ $brandColor ?: '#4f46e5' }}">₡</span>
+    @endif
+    <span class="font-semibold text-slate-800 truncate">{{ $brandLabel }}</span>
 </div>
 
 {{-- Workspace switcher --}}
@@ -51,6 +59,14 @@
 @endif
 
 <nav class="flex-1 overflow-y-auto px-3 py-4 space-y-1">
+    {{-- Global search --}}
+    <form method="GET" action="{{ route('search.index') }}" class="px-1 pb-2">
+        <div class="relative">
+            <svg class="w-4 h-4 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" stroke-width="1.7" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/></svg>
+            <input type="search" name="q" value="{{ request('q') }}" placeholder="Search…" class="w-full pl-8 pr-2 py-1.5 text-sm rounded-lg border-slate-200 focus:border-brand-400 focus:ring-brand-400" />
+        </div>
+    </form>
+
     <x-ui.nav-item :href="route('dashboard')" :active="request()->routeIs('dashboard')" :icon="$ico['home']">
         {{ $isAdmin ? 'Dashboard' : 'My statement' }}
     </x-ui.nav-item>
@@ -59,6 +75,8 @@
         <div class="pt-3 pb-1 px-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Compensation</div>
         <x-ui.nav-item :href="route('admin.plans.index')" :active="request()->routeIs('admin.plans.*')" :icon="$ico['plans']">Plans</x-ui.nav-item>
         <x-ui.nav-item :href="route('admin.transactions.index')" :active="request()->routeIs('admin.transactions.*') || request()->routeIs('admin.imports.*')" :icon="$ico['tx']">Transactions</x-ui.nav-item>
+        <x-ui.nav-item :href="route('admin.import-sources.index')" :active="request()->routeIs('admin.import-sources.*')" :icon="$ico['tx']">Recurring imports</x-ui.nav-item>
+        <x-ui.nav-item :href="route('admin.products.index')" :active="request()->routeIs('admin.products.*')" :icon="$ico['plans']">Products</x-ui.nav-item>
         <x-ui.nav-item :href="route('admin.aliases.index')" :active="request()->routeIs('admin.aliases.*')" :icon="$ico['alias']">Aliases</x-ui.nav-item>
         <x-ui.nav-item :href="route('admin.calc-runs.index')" :active="request()->routeIs('admin.calc-runs.*')" :icon="$ico['calc']">Calculations</x-ui.nav-item>
 

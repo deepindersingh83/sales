@@ -20,7 +20,16 @@ class Workspace extends Model
         'slug',
         'base_currency',
         'api_token',
+        'brand_name',
+        'brand_color',
+        'logo_url',
     ];
+
+    /** The display name shown in white-labelled UI, falling back to the workspace name. */
+    public function displayName(): string
+    {
+        return $this->brand_name ?: $this->name;
+    }
 
     protected $hidden = [
         'api_token',

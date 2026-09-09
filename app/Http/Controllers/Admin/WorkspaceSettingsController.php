@@ -29,11 +29,17 @@ class WorkspaceSettingsController extends Controller
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'base_currency' => ['required', 'string', 'size:3'],
+            'brand_name' => ['nullable', 'string', 'max:255'],
+            'brand_color' => ['nullable', 'string', 'regex:/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/'],
+            'logo_url' => ['nullable', 'url', 'max:2048'],
         ]);
 
         $this->workspace()->update([
             'name' => $data['name'],
             'base_currency' => strtoupper($data['base_currency']),
+            'brand_name' => $data['brand_name'] ?? null,
+            'brand_color' => $data['brand_color'] ?? null,
+            'logo_url' => $data['logo_url'] ?? null,
         ]);
 
         return redirect()->route('admin.settings.edit')->with('status', 'Settings saved.');

@@ -1,11 +1,23 @@
 <x-app-layout>
     <x-slot name="header">
-        <x-ui.page-header title="Team" subtitle="Members and their roles in this workspace" />
+        <x-ui.page-header title="Team" subtitle="Members and their roles in this workspace">
+            <x-slot name="actions">
+                <x-ui.button href="{{ route('admin.members.import.create') }}" variant="secondary">Bulk import</x-ui.button>
+            </x-slot>
+        </x-ui.page-header>
     </x-slot>
 
     <div class="p-4 sm:p-6 lg:p-8 space-y-6 max-w-5xl">
         @if (session('status'))
             <div class="rounded-lg bg-emerald-50 border border-emerald-200 p-4 text-sm text-emerald-800">{{ session('status') }}</div>
+        @endif
+        @if (session('import_errors'))
+            <div class="rounded-lg bg-amber-50 border border-amber-200 p-4 text-sm text-amber-800">
+                <div class="font-medium">Some rows were skipped:</div>
+                <ul class="mt-1 list-disc list-inside">
+                    @foreach (session('import_errors') as $err)<li>{{ $err }}</li>@endforeach
+                </ul>
+            </div>
         @endif
         @if ($errors->any())
             <div class="rounded-lg bg-rose-50 border border-rose-200 p-4 text-sm text-rose-800">{{ $errors->first() }}</div>

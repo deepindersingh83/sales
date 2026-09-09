@@ -15,12 +15,16 @@ use App\Http\Controllers\Admin\TransactionController;
 use App\Http\Controllers\Admin\TransactionImportController;
 use App\Http\Controllers\Admin\WorkspaceSettingsController;
 use App\Http\Controllers\Admin\ContestController;
+use App\Http\Controllers\Admin\ImportSourceController;
+use App\Http\Controllers\Admin\MemberImportController;
+use App\Http\Controllers\Admin\ProductController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DisputeController;
 use App\Http\Controllers\EnrollmentController;
 use App\Http\Controllers\LeaderboardController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\RepController;
+use App\Http\Controllers\SearchController;
 use App\Http\Controllers\SurveyController;
 use App\Http\Controllers\WorkspaceController;
 use Illuminate\Support\Facades\Route;
@@ -52,6 +56,9 @@ Route::middleware('auth')->group(function () {
     Route::get('/my/statement', [RepController::class, 'statement'])->name('my.statement');
     Route::get('/my/team', [RepController::class, 'team'])->name('my.team');
 
+    // Global search across the current workspace.
+    Route::get('/search', [SearchController::class, 'index'])->name('search.index');
+
     // Leaderboard (everyone) + survey responses (participants).
     Route::get('/leaderboard', [LeaderboardController::class, 'index'])->name('leaderboard.index');
     Route::post('/surveys/{survey}/respond', [SurveyController::class, 'respond'])->name('surveys.respond');
@@ -80,9 +87,17 @@ Route::middleware(['auth', 'workspace.admin'])
 
         // Team / member + role management (Full Admin).
         Route::get('members', [MemberController::class, 'index'])->name('members.index');
+        Route::get('members/import', [MemberImportController::class, 'create'])->name('members.import.create');
+        Route::post('members/import', [MemberImportController::class, 'store'])->name('members.import.store');
         Route::post('members', [MemberController::class, 'store'])->name('members.store');
         Route::put('members/{member}', [MemberController::class, 'update'])->name('members.update');
         Route::delete('members/{member}', [MemberController::class, 'destroy'])->name('members.destroy');
+
+        // Product catalogue.
+        Route::get('products', [ProductController::class, 'index'])->name('products.index');
+        Route::post('products', [ProductController::class, 'store'])->name('products.store');
+        Route::put('products/{product}', [ProductController::class, 'update'])->name('products.update');
+        Route::delete('products/{product}', [ProductController::class, 'destroy'])->name('products.destroy');
 
         // Transactions + CSV import.
         Route::get('transactions', [TransactionController::class, 'index'])->name('transactions.index');
@@ -91,6 +106,12 @@ Route::middleware(['auth', 'workspace.admin'])
         Route::get('imports', [TransactionImportController::class, 'create'])->name('imports.create');
         Route::post('imports/preview', [TransactionImportController::class, 'preview'])->name('imports.preview');
         Route::post('imports', [TransactionImportController::class, 'store'])->name('imports.store');
+
+        // Recurring / scheduled import sources.
+        Route::get('import-sources', [ImportSourceController::class, 'index'])->name('import-sources.index');
+        Route::post('import-sources', [ImportSourceController::class, 'store'])->name('import-sources.store');
+        Route::post('import-sources/{source}/run', [ImportSourceController::class, 'run'])->name('import-sources.run');
+        Route::delete('import-sources/{source}', [ImportSourceController::class, 'destroy'])->name('import-sources.destroy');
 
         // Alias-based crediting configuration.
         Route::resource('aliases', AliasController::class)->except(['show']);

@@ -3,13 +3,14 @@
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToWorkspace;
+use App\Models\Concerns\HasTags;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Transaction extends Model
 {
-    use BelongsToWorkspace, HasFactory;
+    use BelongsToWorkspace, HasFactory, HasTags;
 
     protected $fillable = [
         'workspace_id',
