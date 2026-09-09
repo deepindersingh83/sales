@@ -25,6 +25,9 @@
                         <x-nav-link :href="route('admin.aliases.index')" :active="request()->routeIs('admin.aliases.*')">
                             {{ __('Aliases') }}
                         </x-nav-link>
+                        <x-nav-link :href="route('admin.calc-runs.index')" :active="request()->routeIs('admin.calc-runs.*')">
+                            {{ __('Calculations') }}
+                        </x-nav-link>
                     @endif
                 </div>
             </div>

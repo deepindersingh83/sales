@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin\AliasController;
+use App\Http\Controllers\Admin\CalcRunController;
 use App\Http\Controllers\Admin\PlanController;
 use App\Http\Controllers\Admin\TransactionController;
 use App\Http\Controllers\Admin\TransactionImportController;
@@ -37,6 +38,12 @@ Route::middleware(['auth', 'workspace.admin'])
 
         // Alias-based crediting configuration.
         Route::resource('aliases', AliasController::class)->except(['show']);
+
+        // Calculation runs (queued).
+        Route::get('calc-runs', [CalcRunController::class, 'index'])->name('calc-runs.index');
+        Route::post('plans/{plan}/calc-runs', [CalcRunController::class, 'store'])->name('plans.calc-runs.store');
+        Route::get('calc-runs/{calcRun}', [CalcRunController::class, 'show'])->name('calc-runs.show');
+        Route::get('calc-runs/{calcRun}/status', [CalcRunController::class, 'status'])->name('calc-runs.status');
     });
 
 require __DIR__.'/auth.php';

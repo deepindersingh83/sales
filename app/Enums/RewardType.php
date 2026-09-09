@@ -4,6 +4,7 @@ namespace App\Enums;
 
 enum RewardType: string
 {
+    case Commission = 'commission';
     case CashFixed = 'cash_fixed';
     case CashPctRevenue = 'cash_pct_revenue';
     case CashPctProfit = 'cash_pct_profit';
@@ -16,6 +17,7 @@ enum RewardType: string
     public function label(): string
     {
         return match ($this) {
+            self::Commission => 'Commission',
             self::CashFixed => 'Fixed cash',
             self::CashPctRevenue => 'Cash % of revenue',
             self::CashPctProfit => 'Cash % of profit',
@@ -33,6 +35,7 @@ enum RewardType: string
     public function isCash(): bool
     {
         return in_array($this, [
+            self::Commission,
             self::CashFixed,
             self::CashPctRevenue,
             self::CashPctProfit,

@@ -29,9 +29,25 @@ running `DECISIONS.md`.
 
 ## Calculation semantics (Phase 5 — pending user input)
 
-- **D7 — Proration / tier math.** GATED. The user chose to specify the exact partial-period
-  proration rule and cumulative-tier math before the calc engine is built. To be recorded here
-  once provided.
+- **D7 — Proration / tier math (user-confirmed).**
+  - **Cumulative tiers** use **progressive/marginal** math: each tier's rate applies only to the
+    portion of attainment within that tier's band. Each tier is evaluated independently by its
+    own `is_cumulative` flag.
+  - **Non-cumulative tiers**: the single tier whose `[from, to]` band contains total attainment
+    applies its rate to the **entire** attainment; other non-cumulative tiers contribute nothing.
+  - **`amount`-kind tiers** pay their `rate_or_amount` as a **flat cash bonus** once attainment
+    reaches `threshold_from` (bonuses from multiple reached amount-tiers stack). `rate`-kind
+    tiers use the tier math above.
+  - **No partial-period proration** in the MVP: full commission on whatever transactions fall in
+    the period, regardless of enrollment date. A proration hook is left for later.
+  - **Attainment basis**: the plan's `performance_metric` — revenue plans use `amount`, profit
+    plans use `profit_amount`. Attainment = sum of that metric over the rep's credited transactions.
+- **D8 — Credits vs rewards.** A **credit** is per-transaction: `credited_amount` = the metric
+  value credited to the rep. Each transaction is credited to the **first** matching alias's user
+  (documented; multi-/split-crediting is a Phase-2 refinement); unmatched transactions are logged.
+  A rep's tier **commission** is stored as a **Reward** with a dedicated `commission` reward type;
+  `reward_rules` produce additional cash/non-cash rewards. `cash_pct_salary` records a note (no
+  salary data model in MVP).
 
 ## Open items / deferred (Phase 2, not built)
 

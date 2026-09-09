@@ -3,6 +3,14 @@
         <div class="flex items-center justify-between">
             <h2 class="font-semibold text-xl text-gray-800 leading-tight">{{ $plan->name }}</h2>
             <div class="flex items-center gap-3">
+                @can('createForPlan', [App\Models\CalcRun::class, $plan])
+                    <form method="POST" action="{{ route('admin.plans.calc-runs.store', $plan) }}">
+                        @csrf
+                        <button class="inline-flex items-center px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-md hover:bg-green-700">
+                            Run calculation
+                        </button>
+                    </form>
+                @endcan
                 @can('update', $plan)
                     <a href="{{ route('admin.plans.edit', $plan) }}" class="text-sm text-indigo-600 hover:text-indigo-900">Edit</a>
                 @endcan
