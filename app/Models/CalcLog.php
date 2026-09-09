@@ -45,4 +45,9 @@ class CalcLog extends Model
     {
         return $this->belongsTo(Transaction::class);
     }
+
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
 }

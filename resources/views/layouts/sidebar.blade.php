@@ -64,11 +64,13 @@
 
         <div class="pt-3 pb-1 px-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Operate</div>
         <x-ui.nav-item :href="route('admin.disputes.index')" :active="request()->routeIs('admin.disputes.*')" :icon="$ico['dispute']">Disputes</x-ui.nav-item>
+        <x-ui.nav-item :href="route('admin.announcements.index')" :active="request()->routeIs('admin.announcements.*')" :icon="$ico['dispute']">Announcements</x-ui.nav-item>
         <x-ui.nav-item :href="route('admin.reports.index')" :active="request()->routeIs('admin.reports.*')" :icon="$ico['report']">Reports</x-ui.nav-item>
 
         @if ($isFullAdmin)
             <div class="pt-3 pb-1 px-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Administration</div>
             <x-ui.nav-item :href="route('admin.members.index')" :active="request()->routeIs('admin.members.*')" :icon="$ico['team']">Team</x-ui.nav-item>
+            <x-ui.nav-item :href="route('admin.settings.edit')" :active="request()->routeIs('admin.settings.*')" :icon="$ico['calc']">Settings</x-ui.nav-item>
         @endif
     @else
         <x-ui.nav-item :href="route('disputes.index')" :active="request()->routeIs('disputes.*')" :icon="$ico['dispute']">My disputes</x-ui.nav-item>

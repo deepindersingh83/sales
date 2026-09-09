@@ -52,6 +52,28 @@ class CalcRunController extends Controller
         ]);
     }
 
+    /** Full audit trail for a run — every rule application, filterable. */
+    public function logs(CalcRun $calcRun): View
+    {
+        Gate::authorize('view', $calcRun);
+
+        $logs = $calcRun->logs()
+            ->with(['transaction', 'user'])
+            ->when(request('step'), fn ($q, $step) => $q->where('step', $step))
+            ->latest('id')
+            ->paginate(50)
+            ->withQueryString();
+
+        $steps = $calcRun->logs()->select('step')->distinct()->pluck('step');
+
+        return view('admin.calc_runs.logs', [
+            'run' => $calcRun,
+            'logs' => $logs,
+            'steps' => $steps,
+            'activeStep' => request('step'),
+        ]);
+    }
+
     /** Lightweight JSON endpoint the show page polls. */
     public function status(CalcRun $calcRun): JsonResponse
     {

@@ -8,6 +8,17 @@
     </x-slot>
 
     <div class="p-4 sm:p-6 lg:p-8 space-y-6">
+        @if ($announcements->isNotEmpty())
+            <div class="space-y-2">
+                @foreach ($announcements as $a)
+                    <div class="rounded-lg bg-brand-50 border border-brand-100 px-4 py-3">
+                        <div class="text-sm font-medium text-brand-900">{{ $a->title }}</div>
+                        <p class="text-sm text-brand-800/80">{{ $a->body }}</p>
+                    </div>
+                @endforeach
+            </div>
+        @endif
+
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <x-ui.stat label="Total credited (released)" :value="number_format($totalCredited, 2)" />
             <x-ui.stat label="Total payout (released)" :value="number_format($totalPayout, 2)" accent="green" />

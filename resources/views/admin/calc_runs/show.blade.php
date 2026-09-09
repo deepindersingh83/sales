@@ -2,7 +2,10 @@
     <x-slot name="header">
         <div class="flex items-center justify-between">
             <h2 class="font-semibold text-xl text-gray-800 leading-tight">Calculation run #{{ $run->id }}</h2>
-            <a href="{{ route('admin.plans.show', $run->plan) }}" class="text-sm text-indigo-600 hover:text-indigo-900">{{ $run->plan->name }}</a>
+            <div class="flex items-center gap-3">
+                <a href="{{ route('admin.calc-runs.logs', $run) }}" class="text-sm text-slate-600 hover:text-slate-900">Audit trail</a>
+                <a href="{{ route('admin.plans.show', $run->plan) }}" class="text-sm text-indigo-600 hover:text-indigo-900">{{ $run->plan->name }}</a>
+            </div>
         </div>
     </x-slot>
 

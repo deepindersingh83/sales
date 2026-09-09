@@ -3,6 +3,7 @@
 use App\Http\Controllers\Admin\AliasController;
 use App\Http\Controllers\Admin\CalcRunController;
 use App\Http\Controllers\Admin\CalcRunReleaseController;
+use App\Http\Controllers\Admin\AnnouncementController;
 use App\Http\Controllers\Admin\DisputeQueueController;
 use App\Http\Controllers\Admin\MemberController;
 use App\Http\Controllers\Admin\PlanAccessController;
@@ -10,6 +11,7 @@ use App\Http\Controllers\Admin\PlanController;
 use App\Http\Controllers\Admin\ReportController;
 use App\Http\Controllers\Admin\TransactionController;
 use App\Http\Controllers\Admin\TransactionImportController;
+use App\Http\Controllers\Admin\WorkspaceSettingsController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DisputeController;
 use App\Http\Controllers\ProfileController;
@@ -76,6 +78,7 @@ Route::middleware(['auth', 'workspace.admin'])
         Route::post('plans/{plan}/calc-runs', [CalcRunController::class, 'store'])->name('plans.calc-runs.store');
         Route::get('calc-runs/{calcRun}', [CalcRunController::class, 'show'])->name('calc-runs.show');
         Route::get('calc-runs/{calcRun}/status', [CalcRunController::class, 'status'])->name('calc-runs.status');
+        Route::get('calc-runs/{calcRun}/logs', [CalcRunController::class, 'logs'])->name('calc-runs.logs');
 
         // Two-stage review/release pipeline for a run's credits and rewards.
         Route::get('calc-runs/{calcRun}/credits', [CalcRunReleaseController::class, 'credits'])->name('calc-runs.credits.index');
@@ -85,6 +88,13 @@ Route::middleware(['auth', 'workspace.admin'])
 
         // Dispute triage queue.
         Route::get('disputes', [DisputeQueueController::class, 'index'])->name('disputes.index');
+
+        // Announcements (writers manage; reps see published ones on their dashboard).
+        Route::resource('announcements', AnnouncementController::class)->except(['show']);
+
+        // Workspace settings (Full Admin).
+        Route::get('settings', [WorkspaceSettingsController::class, 'edit'])->name('settings.edit');
+        Route::put('settings', [WorkspaceSettingsController::class, 'update'])->name('settings.update');
 
         // Built-in reports (with ?export=csv).
         Route::get('reports', [ReportController::class, 'index'])->name('reports.index');

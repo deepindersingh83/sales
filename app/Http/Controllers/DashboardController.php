@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Enums\DisputeStatus;
 use App\Enums\PayoutStatus;
+use App\Models\Announcement;
 use App\Models\CalcRun;
 use App\Models\Credit;
 use App\Models\Dispute;
@@ -59,11 +60,17 @@ class DashboardController extends Controller
         $totalCredited = (float) $credits->sum('credited_amount');
         $totalPayout = (float) $rewards->sum('computed_amount');
 
+        $announcements = Announcement::whereNotNull('published_at')
+            ->latest('published_at')
+            ->take(5)
+            ->get();
+
         return view('participant.dashboard', [
             'credits' => $credits,
             'rewards' => $rewards,
             'totalCredited' => $totalCredited,
             'totalPayout' => $totalPayout,
+            'announcements' => $announcements,
         ]);
     }
 }
