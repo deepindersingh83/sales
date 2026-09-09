@@ -26,6 +26,7 @@ class CalculationEngine
         protected TierCalculator $tierCalculator,
         protected AliasCreditingStrategy $strategy,
         protected FormulaEvaluator $formula,
+        protected FxConverter $fx,
     ) {}
 
     /**
@@ -39,13 +40,15 @@ class CalculationEngine
         $rewardRules = $snapshot['reward_rules'] ?? [];
 
         $this->strategy->warm();
+        $this->fx->forWorkspace($run->workspace_id);
+        $planCurrency = $snapshot['plan']['currency'] ?? 'USD';
 
         $credited = 0;
         $uncredited = 0;
         /** @var array<int, array{attainment:float, revenue:float, profit:float}> $acc */
         $acc = [];
 
-        return DB::transaction(function () use ($run, $snapshot, $metric, $tiers, $rewardRules, &$credited, &$uncredited, &$acc) {
+        return DB::transaction(function () use ($run, $snapshot, $metric, $tiers, $rewardRules, $planCurrency, &$credited, &$uncredited, &$acc) {
             foreach ($this->transactionsFor($run, $snapshot) as $tx) {
                 $allocations = $this->strategy->allocations($tx);
 
@@ -56,7 +59,19 @@ class CalculationEngine
                     continue;
                 }
 
-                $value = $tx->metricValue($metric);
+                // Convert the transaction into the plan's currency (1:1 when they
+                // match or no rate exists).
+                $txDate = optional($tx->transaction_date)->toDateString();
+                $rate = $this->fx->rate($tx->currency, $planCurrency, $txDate) ?? 1.0;
+                $value = $tx->metricValue($metric) * $rate;
+                $convAmount = (float) $tx->amount * $rate;
+                $convProfit = (float) ($tx->profit_amount ?? 0) * $rate;
+
+                if ($rate != 1.0) {
+                    $this->log($run, 'fx_converted', $tx, null, $tx->metricValue($metric), $value,
+                        "Converted {$tx->currency} to {$planCurrency} at {$rate}.",
+                        ['from' => $tx->currency, 'to' => $planCurrency, 'rate' => $rate]);
+                }
 
                 foreach ($allocations as $alloc) {
                     $userId = $alloc['user_id'];
@@ -68,7 +83,7 @@ class CalculationEngine
                         'transaction_id' => $tx->id,
                         'user_id' => $userId,
                         'credited_amount' => $credit,
-                        'currency' => $tx->currency,
+                        'currency' => $planCurrency,
                         'status' => 'pending',
                     ]);
 
@@ -78,8 +93,8 @@ class CalculationEngine
 
                     $acc[$userId] ??= ['attainment' => 0.0, 'revenue' => 0.0, 'profit' => 0.0];
                     $acc[$userId]['attainment'] += $credit;
-                    $acc[$userId]['revenue'] += (float) $tx->amount * $fraction;
-                    $acc[$userId]['profit'] += (float) ($tx->profit_amount ?? 0) * $fraction;
+                    $acc[$userId]['revenue'] += $convAmount * $fraction;
+                    $acc[$userId]['profit'] += $convProfit * $fraction;
                     $credited++;
                 }
             }

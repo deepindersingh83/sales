@@ -5,6 +5,7 @@ use App\Http\Controllers\Admin\CalcRunController;
 use App\Http\Controllers\Admin\CalcRunReleaseController;
 use App\Http\Controllers\Admin\AnnouncementController;
 use App\Http\Controllers\Admin\DisputeQueueController;
+use App\Http\Controllers\Admin\FxRateController;
 use App\Http\Controllers\Admin\MemberController;
 use App\Http\Controllers\Admin\PlanAccessController;
 use App\Http\Controllers\Admin\PlanController;
@@ -96,6 +97,11 @@ Route::middleware(['auth', 'workspace.admin'])
         // Workspace settings (Full Admin).
         Route::get('settings', [WorkspaceSettingsController::class, 'edit'])->name('settings.edit');
         Route::put('settings', [WorkspaceSettingsController::class, 'update'])->name('settings.update');
+
+        // FX rates (Full Admin).
+        Route::get('fx', [FxRateController::class, 'index'])->name('fx.index');
+        Route::post('fx', [FxRateController::class, 'store'])->name('fx.store');
+        Route::delete('fx/{fxRate}', [FxRateController::class, 'destroy'])->name('fx.destroy');
 
         // Built-in reports (with ?export=csv).
         Route::get('reports', [ReportController::class, 'index'])->name('reports.index');
