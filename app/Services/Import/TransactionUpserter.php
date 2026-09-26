@@ -54,6 +54,17 @@ class TransactionUpserter
                 'transaction_date' => $this->toDate($row['transaction_date'] ?? null),
             ];
 
+            // Sources that know payment state (e.g. Xero) drive pay-when-paid.
+            if (array_key_exists('is_paid', $row)) {
+                $attributes['is_paid'] = (bool) $row['is_paid'];
+            }
+
+            // A source can exclude a row (e.g. a voided invoice) but never
+            // re-include one — that would undo an admin's manual exclusion.
+            if (! empty($row['excluded'])) {
+                $attributes['excluded'] = true;
+            }
+
             if ($existing) {
                 $existing->fill($attributes)->save();
                 $updated++;

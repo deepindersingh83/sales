@@ -3,14 +3,15 @@
 namespace App\Services\Connectors;
 
 /**
- * The catalogue of integrations. Live connectors are fully implemented; the
- * rest are scaffolds — registered, config-aware, and ready for a driver
- * implementation + the customer's credentials.
+ * The catalogue of integrations. Live connectors are fully implemented; Xero
+ * is the one CRM/ERP/accounting connector live today (OAuth "Connect" flow).
+ * The rest are listed as coming soon — registered and config-aware, ready for
+ * a driver implementation + the customer's credentials.
  */
 class ConnectorRegistry
 {
     /**
-     * @return array<int, array{key:string, label:string, category:string, live:bool, fields:array<string,string>}>
+     * @return array<int, array{key:string, label:string, category:string, live:bool, fields:array<string,string>, connect_route:?string}>
      */
     public function all(): array
     {
@@ -26,7 +27,7 @@ class ConnectorRegistry
 
             $this->entry('netsuite', 'NetSuite', 'erp', false, ['account_id' => 'Account ID', 'consumer_key' => 'Consumer Key', 'consumer_secret' => 'Consumer Secret']),
             $this->entry('quickbooks', 'QuickBooks', 'accounting', false, ['realm_id' => 'Realm ID', 'client_id' => 'Client ID', 'client_secret' => 'Client Secret']),
-            $this->entry('xero', 'Xero', 'accounting', false, ['client_id' => 'Client ID', 'client_secret' => 'Client Secret']),
+            $this->entry('xero', 'Xero', 'accounting', true, [], 'admin.connectors.xero.connect'),
 
             $this->entry('stripe', 'Stripe', 'payments', false, ['secret_key' => 'Secret Key']),
             $this->entry('paypal', 'PayPal', 'payments', false, ['client_id' => 'Client ID', 'client_secret' => 'Client Secret']),
@@ -34,15 +35,23 @@ class ConnectorRegistry
             $this->entry('snowflake', 'Snowflake', 'bi', false, ['account' => 'Account', 'user' => 'User', 'password' => 'Password']),
             $this->entry('powerbi', 'Power BI', 'bi', true, []),   // consumes the /api/v1/payouts feed
             $this->entry('tableau', 'Tableau', 'bi', true, []),
+            $this->entry('odata', 'OData feed (Excel / Power BI)', 'bi', true, []),
         ];
     }
 
     /**
      * @param  array<string, string>  $fields
-     * @return array{key:string, label:string, category:string, live:bool, fields:array<string,string>}
+     * @return array{key:string, label:string, category:string, live:bool, fields:array<string,string>, connect_route:?string}
      */
-    private function entry(string $key, string $label, string $category, bool $live, array $fields): array
+    private function entry(string $key, string $label, string $category, bool $live, array $fields, ?string $connectRoute = null): array
     {
-        return compact('key', 'label', 'category', 'live', 'fields');
+        return [
+            'key' => $key,
+            'label' => $label,
+            'category' => $category,
+            'live' => $live,
+            'fields' => $fields,
+            'connect_route' => $connectRoute,
+        ];
     }
 }

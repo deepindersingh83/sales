@@ -3,13 +3,15 @@
 namespace App\Services\Import;
 
 use App\Models\ImportSource;
+use App\Services\Connectors\Xero\XeroDriver;
 use App\Support\WorkspaceContext;
 
 /**
- * Executes a stored ImportSource: reads its CSV from the configured path,
- * applies the saved column mapping, and upserts transactions. Used by both the
- * scheduler command and the "run now" admin action. Sets the source's
- * last_synced_at / next_run_at bookkeeping.
+ * Executes a stored ImportSource: either re-reads its CSV (applying the saved
+ * column mapping) or pulls from its live connector (Xero), then upserts
+ * transactions. Used by both the scheduler command and the "run now" admin
+ * action. Sets the source's last_synced_at / next_run_at / last_error
+ * bookkeeping.
  */
 class ScheduledImportRunner
 {
@@ -18,6 +20,7 @@ class ScheduledImportRunner
         protected ColumnMapper $mapper,
         protected TransactionUpserter $upserter,
         protected WorkspaceContext $context,
+        protected XeroDriver $xero,
     ) {}
 
     /**
@@ -25,32 +28,65 @@ class ScheduledImportRunner
      */
     public function run(ImportSource $source): array
     {
+        // The runner may execute outside an HTTP request (queue/scheduler), so
+        // bind the workspace context to the source's tenant for the duration.
+        return $this->context->runAs($source->workspace_id, function () use ($source) {
+            $startedAt = now();
+
+            try {
+                [$rows, $config] = $source->isConnector()
+                    ? $this->connectorRows($source, $startedAt)
+                    : $this->csvRows($source);
+            } catch (\Throwable $e) {
+                $source->forceFill(['last_error' => $e->getMessage()])->save();
+
+                throw $e;
+            }
+
+            $result = $this->upserter->upsert($rows, $source->type ?: 'csv', $source);
+
+            $source->forceFill([
+                'last_synced_at' => $startedAt,
+                'last_error' => null,
+                'next_run_at' => $source->computeNextRunAt($startedAt),
+                'config' => $config,
+            ])->save();
+
+            return $result;
+        });
+    }
+
+    /**
+     * @return array{0: array<int, array<string, mixed>>, 1: array<string, mixed>}
+     */
+    protected function csvRows(ImportSource $source): array
+    {
         $path = $source->source_path;
 
         if (! $path || ! is_readable($path)) {
             throw new \RuntimeException("Import source file is missing or unreadable: {$path}");
         }
 
-        // The runner may execute outside an HTTP request (queue/scheduler), so
-        // bind the workspace context to the source's tenant for the duration.
-        return $this->context->runAs($source->workspace_id, function () use ($source, $path) {
-            $mapping = $source->config['mapping'] ?? $this->mapper->autoDetect($this->reader->headers($path));
+        $mapping = $source->config['mapping'] ?? $this->mapper->autoDetect($this->reader->headers($path));
 
-            $rows = array_map(
-                fn (array $row) => $this->reader->applyMapping($row, $mapping),
-                $this->reader->rows($path),
-            );
+        $rows = array_map(
+            fn (array $row) => $this->reader->applyMapping($row, $mapping),
+            $this->reader->rows($path),
+        );
 
-            $result = $this->upserter->upsert($rows, $source->type ?: 'csv', $source);
+        return [$rows, array_merge($source->config ?? [], ['mapping' => $mapping])];
+    }
 
-            $now = now();
-            $source->forceFill([
-                'last_synced_at' => $now,
-                'next_run_at' => $source->computeNextRunAt($now),
-                'config' => array_merge($source->config ?? [], ['mapping' => $mapping]),
-            ])->save();
+    /**
+     * Pull from the live connector. The sync cursor only advances once the
+     * pull succeeded, so a failed run is retried from the same point.
+     *
+     * @return array{0: array<int, array<string, mixed>>, 1: array<string, mixed>}
+     */
+    protected function connectorRows(ImportSource $source, \DateTimeInterface $startedAt): array
+    {
+        $rows = $this->xero->rows($source);
 
-            return $result;
-        });
+        return [$rows, array_merge($source->config ?? [], ['synced_through' => $startedAt->format(DATE_ATOM)])];
     }
 }

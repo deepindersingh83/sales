@@ -36,7 +36,8 @@
                     <x-ui.button>Create source</x-ui.button>
                 </div>
             </form>
-            <p class="mt-3 text-xs text-slate-500">Column mapping is auto-detected from the header row and reused on every run. Re-imports are idempotent (matched on external ID).</p>
+            <p class="mt-3 text-xs text-slate-500">Column mapping is auto-detected from the header row and reused on every run. Re-imports are idempotent (matched on external ID).
+                To sync Xero invoices instead, <a href="{{ route('admin.connectors.index') }}" class="text-brand-600 hover:text-brand-800">connect Xero</a>.</p>
         </x-ui.card>
 
         <x-ui.card padding="p-0">
@@ -50,14 +51,20 @@
                 <tbody class="divide-y divide-slate-100">
                     @forelse ($sources as $source)
                         <tr>
-                            <td class="px-6 py-3 text-slate-800">{{ $source->name }}</td>
+                            <td class="px-6 py-3 text-slate-800">
+                                {{ $source->name }}
+                                <x-ui.badge :color="$source->isConnector() ? 'brand' : 'slate'" class="ml-1 uppercase">{{ $source->type }}</x-ui.badge>
+                                @if ($source->last_error)
+                                    <p class="mt-1 text-xs text-rose-600">Last sync failed: {{ $source->last_error }}</p>
+                                @endif
+                            </td>
                             <td class="px-6 py-3">
                                 <span class="inline-block rounded-full bg-slate-100 text-slate-600 px-2 py-0.5 text-xs capitalize">{{ $source->schedule ?? 'manual' }}</span>
                             </td>
                             <td class="px-6 py-3 text-slate-500">{{ $source->last_synced_at?->diffForHumans() ?? 'never' }}</td>
                             <td class="px-6 py-3 text-slate-500">{{ $source->next_run_at?->diffForHumans() ?? '—' }}</td>
                             <td class="px-6 py-3 text-right space-x-3">
-                                @if ($source->schedule && $source->source_path)
+                                @if ($source->schedule && $source->isRunnable())
                                     <form method="POST" action="{{ route('admin.import-sources.run', $source) }}" class="inline">
                                         @csrf
                                         <button class="text-brand-600 hover:text-brand-800">Run now</button>
