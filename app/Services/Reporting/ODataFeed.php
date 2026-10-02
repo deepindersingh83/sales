@@ -19,6 +19,13 @@ class ODataFeed
 {
     public const NAMESPACE = 'SalesManagement';
 
+    /**
+     * System query options this feed implements. Anything else ($expand,
+     * $search, $apply…) is rejected rather than silently ignored, so a BI
+     * tool never mistakes an unfiltered result for a transformed one.
+     */
+    public const SUPPORTED_OPTIONS = ['$filter', '$orderby', '$select', '$top', '$skip', '$count', '$format'];
+
     /** Server page size; clients follow @odata.nextLink for more. */
     public const PAGE_SIZE = 1000;
 
@@ -117,6 +124,14 @@ class ODataFeed
      */
     public function query(string $setName, array $options): array
     {
+        $unsupported = array_diff(array_keys($options), self::SUPPORTED_OPTIONS);
+        if ($unsupported !== []) {
+            throw new ODataQueryException('Unsupported query option: '.implode(', ', $unsupported).'.');
+        }
+        if (isset($options['$format']) && strtolower((string) $options['$format']) !== 'json') {
+            throw new ODataQueryException('Only $format=json is supported.');
+        }
+
         $set = $this->entitySets()[$setName];
         $properties = $set['properties'];
 
@@ -192,9 +207,14 @@ class ODataFeed
                 $query->where($column, $operators[$op], $value);
             }
 
-            if (empty($m[4]) && $offset < $length) {
+            $joinedByAnd = ! empty($m[4]);
+            if (! $joinedByAnd && $offset < $length) {
                 throw new ODataQueryException('Unsupported $filter. Clauses must be joined with "and".');
             }
+        }
+
+        if ($joinedByAnd ?? false) {
+            throw new ODataQueryException('Incomplete $filter: expected a clause after "and".');
         }
     }
 
@@ -258,11 +278,27 @@ class ODataFeed
             $lower === 'null' => null,
             $lower === 'true', $lower === 'false' => $lower === 'true',
             str_starts_with($raw, "'") => str_replace("''", "'", substr($raw, 1, -1)),
-            (bool) preg_match('/^\d{4}-\d{2}-\d{2}/', $raw) => $type === 'Edm.Date'
-                ? Carbon::parse($raw)->toDateString()
-                : Carbon::parse($raw)->utc()->format('Y-m-d H:i:s'),
+            (bool) preg_match('/^\d{4}-\d{2}-\d{2}/', $raw) => $this->dateLiteral($raw, $type),
             default => $raw + 0,
         };
+    }
+
+    /** Parse a date/datetime literal, rejecting impossible dates like 2026-02-30. */
+    protected function dateLiteral(string $raw, string $type): string
+    {
+        [$year, $month, $day] = array_map('intval', explode('-', substr($raw, 0, 10)));
+
+        if (! checkdate($month, $day, $year)) {
+            throw new ODataQueryException("Invalid date literal: {$raw}");
+        }
+
+        try {
+            $date = Carbon::parse($raw);
+        } catch (\Throwable) {
+            throw new ODataQueryException("Invalid date literal: {$raw}");
+        }
+
+        return $type === 'Edm.Date' ? $date->toDateString() : $date->utc()->format('Y-m-d H:i:s');
     }
 
     protected function nonNegativeInt(mixed $value, string $option): ?int

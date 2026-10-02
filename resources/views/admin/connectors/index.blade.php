@@ -43,7 +43,7 @@
                                     <p class="mt-2 text-xs text-amber-700">Server setup needed: set XERO_CLIENT_ID and XERO_CLIENT_SECRET.</p>
                                 @endif
                             @elseif ($c['key'] === 'odata')
-                                <p class="mt-2 text-xs text-slate-500 break-all">Feed URL: {{ url('/api/odata') }}</p>
+                                <p class="mt-2 text-xs text-slate-500 break-all">Feed URL: {{ url('/api/v1/odata') }}</p>
                             @elseif ($c['live'])
                                 <p class="mt-2 text-xs text-slate-500">Ready to use.</p>
                             @else

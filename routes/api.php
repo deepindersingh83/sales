@@ -21,7 +21,7 @@ Route::middleware('auth.api')->prefix('v1')->group(function () {
  * OData v4 feed for Power BI / Excel / Tableau. BI tools authenticate with
  * Basic auth (API token as password) — see AuthenticateApiToken.
  */
-Route::middleware('auth.api')->prefix('odata')->group(function () {
+Route::middleware('auth.api')->prefix('v1/odata')->group(function () {
     Route::get('/', [ODataController::class, 'service'])->name('api.odata.service');
     Route::get('$metadata', [ODataController::class, 'metadata'])->name('api.odata.metadata');
     Route::get('{entitySet}', [ODataController::class, 'entitySet'])

@@ -10,7 +10,7 @@ connectors, a driver) to go live. What is fully live today is listed first.
   per-workspace bearer token. See README.
 - **BI feed** — `GET /api/v1/payouts` returns released rewards as JSON for
   Power BI / Tableau.
-- **OData v4 feed** — `/api/odata` (entity sets `Payouts`, `Credits`,
+- **OData v4 feed** — `/api/v1/odata` (entity sets `Payouts`, `Credits`,
   `Transactions`; `$metadata`, `$filter` with eq/ne/gt/ge/lt/le + `and`,
   `$orderby`, `$select`, `$top`, `$skip`, `$count`, server paging via
   `@odata.nextLink`). In Power BI / Excel use **Get Data → OData feed** with

@@ -60,7 +60,7 @@
             <h2 class="text-sm font-semibold text-slate-800">Power BI, Tableau &amp; Excel</h2>
             <p class="mt-1 text-sm text-slate-600">
                 Connect with <span class="font-medium">Get Data → OData feed</span> to
-                <code class="text-xs bg-slate-100 rounded px-1.5 py-0.5 break-all">{{ url('/api/odata') }}</code>
+                <code class="text-xs bg-slate-100 rounded px-1.5 py-0.5 break-all">{{ url('/api/v1/odata') }}</code>
                 using <span class="font-medium">Basic</span> authentication: any user name, and your workspace API token
                 (Settings → REST API) as the password. Entity sets: Payouts, Credits, Transactions.
             </p>

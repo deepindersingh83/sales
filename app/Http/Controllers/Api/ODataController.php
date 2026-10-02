@@ -69,7 +69,7 @@ class ODataController extends Controller
 
     protected function root(): string
     {
-        return url('/api/odata');
+        return url('/api/v1/odata');
     }
 
     /**

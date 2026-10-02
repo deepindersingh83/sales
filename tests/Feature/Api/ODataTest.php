@@ -34,7 +34,7 @@ class ODataTest extends TestCase
 
     public function test_feed_requires_a_token_and_challenges_for_basic_auth(): void
     {
-        $this->getJson('/api/odata/Transactions')
+        $this->getJson('/api/v1/odata/Transactions')
             ->assertStatus(401)
             ->assertHeader('WWW-Authenticate');
     }
@@ -44,17 +44,27 @@ class ODataTest extends TestCase
         [, $token] = $this->workspaceWithToken();
 
         $this->withHeader('Authorization', 'Basic '.base64_encode("powerbi:{$token}"))
-            ->getJson('/api/odata')
+            ->getJson('/api/v1/odata')
             ->assertOk()
             ->assertHeader('OData-Version', '4.0')
             ->assertJsonPath('value.0.name', 'Payouts');
+    }
+
+    public function test_basic_auth_with_a_wrong_password_is_rejected(): void
+    {
+        $this->workspaceWithToken();
+
+        $this->withHeader('Authorization', 'Basic '.base64_encode('powerbi:wsk_wrong'))
+            ->getJson('/api/v1/odata/Transactions')
+            ->assertStatus(401)
+            ->assertHeader('WWW-Authenticate');
     }
 
     public function test_metadata_describes_every_entity_set(): void
     {
         [, $token] = $this->workspaceWithToken();
 
-        $xml = $this->withToken($token)->get('/api/odata/$metadata')->assertOk()->getContent();
+        $xml = $this->withToken($token)->get('/api/v1/odata/$metadata')->assertOk()->getContent();
 
         $doc = simplexml_load_string($xml);
         $this->assertNotFalse($doc);
@@ -72,7 +82,7 @@ class ODataTest extends TestCase
         $this->transaction($ws, 'C', 200, '2026-08-15');
 
         $this->withToken($token)
-            ->getJson('/api/odata/Transactions?'.http_build_query([
+            ->getJson('/api/v1/odata/Transactions?'.http_build_query([
                 '$filter' => "TransactionDate ge 2026-08-01 and SourceSystem eq 'xero'",
                 '$orderby' => 'Amount desc',
                 '$select' => 'ExternalId,Amount,Customer',
@@ -80,7 +90,7 @@ class ODataTest extends TestCase
             ]))
             ->assertOk()
             ->assertExactJson([
-                '@odata.context' => url('/api/odata/$metadata#Transactions'),
+                '@odata.context' => url('/api/v1/odata/$metadata#Transactions'),
                 '@odata.count' => 2,
                 'value' => [
                     ['ExternalId' => 'B', 'Amount' => 300, 'Customer' => 'Customer B'],
@@ -96,7 +106,7 @@ class ODataTest extends TestCase
         $this->transaction($ws, 'X', 100, '2026-07-01');
 
         $this->withToken($token)
-            ->getJson('/api/odata/Transactions?'.http_build_query(['$filter' => "ExternalId eq 'O''Brien'"]))
+            ->getJson('/api/v1/odata/Transactions?'.http_build_query(['$filter' => "ExternalId eq 'O''Brien'"]))
             ->assertOk()
             ->assertJsonCount(1, 'value')
             ->assertJsonPath('value.0.ExternalId', "O'Brien");
@@ -109,7 +119,7 @@ class ODataTest extends TestCase
             $this->transaction($ws, "T{$i}", $i, '2026-07-01');
         }
 
-        $page = $this->withToken($token)->getJson('/api/odata/Transactions?$top=2')->assertOk();
+        $page = $this->withToken($token)->getJson('/api/v1/odata/Transactions?$top=2')->assertOk();
 
         // $top is honoured and, once reached, no further page is offered.
         $page->assertJsonCount(2, 'value');
@@ -126,7 +136,7 @@ class ODataTest extends TestCase
         }
         Transaction::insert($rows);
 
-        $first = $this->withToken($token)->getJson('/api/odata/Transactions?$select=Id')->assertOk();
+        $first = $this->withToken($token)->getJson('/api/v1/odata/Transactions?$select=Id')->assertOk();
 
         $first->assertJsonCount(ODataFeed::PAGE_SIZE, 'value');
         $next = $first->json()['@odata.nextLink'];
@@ -149,13 +159,13 @@ class ODataTest extends TestCase
         $other = Workspace::factory()->create();
         $this->transaction($other, 'OTHER', 1, '2026-07-01');
 
-        $this->withToken($token)->getJson('/api/odata/Payouts')
+        $this->withToken($token)->getJson('/api/v1/odata/Payouts')
             ->assertOk()
             ->assertJsonCount(1, 'value')
             ->assertJsonPath('value.0.UserName', 'Alice')
             ->assertJsonPath('value.0.PlanName', 'AE Plan');
 
-        $this->withToken($token)->getJson('/api/odata/Transactions')->assertOk()->assertJsonCount(0, 'value');
+        $this->withToken($token)->getJson('/api/v1/odata/Transactions')->assertOk()->assertJsonCount(0, 'value');
     }
 
     public function test_unsupported_query_options_return_an_odata_error(): void
@@ -169,9 +179,15 @@ class ODataTest extends TestCase
             ['$orderby' => 'Amount; drop table transactions'],
             ['$select' => 'Secret'],
             ['$top' => '-1'],
+            ['$filter' => 'Amount gt 1 and '],                     // dangling "and"
+            ['$filter' => 'TransactionDate ge 2026-99-99'],        // impossible date
+            ['$filter' => 'TransactionDate ge 2026-02-30'],
+            ['$expand' => 'Credits'],                              // unsupported option
+            ['$search' => 'acme'],
+            ['$format' => 'xml'],
         ] as $options) {
             $this->withToken($token)
-                ->getJson('/api/odata/Transactions?'.http_build_query($options))
+                ->getJson('/api/v1/odata/Transactions?'.http_build_query($options))
                 ->assertStatus(400)
                 ->assertJsonPath('error.code', 'BadRequest');
         }
@@ -181,6 +197,6 @@ class ODataTest extends TestCase
     {
         [, $token] = $this->workspaceWithToken();
 
-        $this->withToken($token)->getJson('/api/odata/Users')->assertNotFound();
+        $this->withToken($token)->getJson('/api/v1/odata/Users')->assertNotFound();
     }
 }
