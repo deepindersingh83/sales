@@ -36,6 +36,9 @@ class CalculationEngine
     /** @var array<int, array<string, float>> user_id => reward_type => already-released amount (true-up mode) */
     protected array $alreadyPaid = [];
 
+    /** @var array<int, array<int, float>> transaction_id => user_id => already-released credit (true-up mode) */
+    protected array $alreadyCredited = [];
+
     /**
      * @return array{credited:int, uncredited:int, reps:int, commission_total:float}
      */
@@ -61,8 +64,10 @@ class CalculationEngine
         // True-up mode: what each rep was already paid on this plan (released
         // cash rewards from prior runs, per type) — new amounts are netted against it.
         $this->alreadyPaid = [];
+        $this->alreadyCredited = [];
         if ($run->mode === 'true_up') {
             $this->alreadyPaid = $this->alreadyPaidByUserAndType($run);
+            $this->alreadyCredited = $this->alreadyCreditedByTransactionAndUser($run);
         }
 
         $credited = 0;
@@ -105,14 +110,7 @@ class CalculationEngine
                     $fraction = $alloc['fraction'];
                     $credit = $value * $fraction;
 
-                    Credit::create([
-                        'calc_run_id' => $run->id,
-                        'transaction_id' => $tx->id,
-                        'user_id' => $userId,
-                        'credited_amount' => $credit,
-                        'currency' => $planCurrency,
-                        'status' => 'pending',
-                    ]);
+                    $this->createCredit($run, $tx->id, $userId, $credit, $planCurrency);
 
                     $this->log($run, 'credit_matched', $tx, $userId, 0.0, $credit,
                         'Credited '.($fraction < 1.0 ? round($fraction * 100, 2).'% of ' : '')."{$metric} value to user #{$userId}.",
@@ -149,7 +147,8 @@ class CalculationEngine
             }
 
             if ($run->mode === 'true_up') {
-                $commissionTotal += $this->clawBackUncreditedUsers($run, $acc, $snapshot['plan']['currency'] ?? 'USD');
+                $this->reverseUnmatchedReleasedCredits($run, $planCurrency);
+                $commissionTotal += $this->clawBackUncreditedUsers($run, $acc, $planCurrency);
             }
 
             $this->applyManagerOverrides($run, $snapshot, $acc);
@@ -462,6 +461,68 @@ class CalculationEngine
             $type->label().' true-up delta: gross '.$meta['gross'].' minus already-paid '.$meta['already_paid'].'.', $meta);
 
         return $delta;
+    }
+
+    /**
+     * Persist a credit. In a true-up only the delta against what was already
+     * released for this transaction and user on the plan is written (zero
+     * deltas are skipped), so the sum of released credits per user per plan
+     * stays equal to current attainment once the true-up is released.
+     */
+    protected function createCredit(CalcRun $run, int $transactionId, int $userId, float $amount, string $currency): void
+    {
+        if ($run->mode === 'true_up') {
+            $amount -= $this->alreadyCredited[$transactionId][$userId] ?? 0.0;
+            unset($this->alreadyCredited[$transactionId][$userId]);
+
+            if (round($amount, 4) == 0.0) {
+                return;
+            }
+        }
+
+        Credit::create([
+            'calc_run_id' => $run->id,
+            'transaction_id' => $transactionId,
+            'user_id' => $userId,
+            'credited_amount' => $amount,
+            'currency' => $currency,
+            'status' => 'pending',
+        ]);
+    }
+
+    /**
+     * True-up: released credits whose transaction/user pair is no longer
+     * credited (excluded, out of scope, re-assigned) are reversed with an
+     * offsetting negative credit.
+     */
+    protected function reverseUnmatchedReleasedCredits(CalcRun $run, string $currency): void
+    {
+        foreach ($this->alreadyCredited as $transactionId => $byUser) {
+            foreach (array_keys($byUser) as $userId) {
+                $this->createCredit($run, $transactionId, $userId, 0.0, $currency);
+            }
+        }
+    }
+
+    /**
+     * Released credits from prior runs of this plan, summed per transaction
+     * and user.
+     *
+     * @return array<int, array<int, float>>
+     */
+    protected function alreadyCreditedByTransactionAndUser(CalcRun $run): array
+    {
+        $credited = [];
+
+        Credit::released()
+            ->whereIn('calc_run_id', CalcRun::where('plan_id', $run->plan_id)->select('id'))
+            ->where('calc_run_id', '!=', $run->id)
+            ->get()
+            ->each(function (Credit $credit) use (&$credited): void {
+                $credited[$credit->transaction_id][$credit->user_id] = ($credited[$credit->transaction_id][$credit->user_id] ?? 0.0) + (float) $credit->credited_amount;
+            });
+
+        return $credited;
     }
 
     /**

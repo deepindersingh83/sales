@@ -152,4 +152,24 @@ class PlanDesignGapsTest extends TestCase
         $this->assertEqualsWithDelta(-100.0, $amount($rep->id, RewardType::CashFixed), 0.01);
         $this->assertEqualsWithDelta(-500.0, $amount($manager->id, RewardType::Override), 0.01);
     }
+
+    public function test_released_true_up_credits_sum_to_current_attainment(): void
+    {
+        $ws = Workspace::factory()->create();
+        [$plan, $rep] = $this->baseSetup($ws);
+        Transaction::create(['workspace_id' => $ws->id, 'external_id' => 'T1', 'source_system' => 'csv', 'amount' => 10000, 'currency' => 'USD', 'raw_data' => ['rep' => 'Alice']]);
+        $reversed = Transaction::create(['workspace_id' => $ws->id, 'external_id' => 'T2', 'source_system' => 'csv', 'amount' => 2000, 'currency' => 'USD', 'raw_data' => ['rep' => 'Alice']]);
+
+        $run1 = app(StartCalcRun::class)->handle($plan);
+        Credit::where('calc_run_id', $run1->id)->update(['status' => PayoutStatus::Released]);
+
+        $reversed->update(['excluded' => true]);
+        Transaction::create(['workspace_id' => $ws->id, 'external_id' => 'T3', 'source_system' => 'csv', 'amount' => 5000, 'currency' => 'USD', 'raw_data' => ['rep' => 'Alice']]);
+        $run2 = app(StartCalcRun::class)->handle($plan, null, false, 'true_up');
+        Credit::where('calc_run_id', $run2->id)->update(['status' => PayoutStatus::Released]);
+
+        // Current attainment is T1 + T3 = 15,000, and commission is still computed on the full gross.
+        $this->assertEqualsWithDelta(15000.0, (float) Credit::released()->where('user_id', $rep->id)->sum('credited_amount'), 0.01);
+        $this->assertEqualsWithDelta(1500.0, $this->commission($run2->id), 0.01);
+    }
 }
