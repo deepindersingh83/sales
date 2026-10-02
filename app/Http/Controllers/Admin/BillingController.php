@@ -45,12 +45,17 @@ class BillingController extends Controller
             'tier' => ['required', 'string', 'in:'.implode(',', array_keys($this->subscriptions->tiers()))],
         ]);
 
-        $changed = $this->subscriptions->changeTier($this->workspace(), $data['tier']);
+        $workspace = $this->workspace();
 
-        return redirect()->route('admin.billing.index')->with(
-            'status',
-            $changed ? 'Subscription updated.' : 'Could not change the subscription tier.',
-        );
+        if (! $this->subscriptions->changeTier($workspace, $data['tier'])) {
+            $cap = $this->subscriptions->tiers()[$data['tier']]['max_payees'] ?? null;
+
+            return redirect()->route('admin.billing.index')->withErrors(['tier' => $cap !== null
+                ? "That plan allows {$cap} members and you have {$workspace->users()->count()}. Remove members first."
+                : 'Could not change the subscription tier.']);
+        }
+
+        return redirect()->route('admin.billing.index')->with('status', 'Subscription updated.');
     }
 
     public function startTrial(): RedirectResponse

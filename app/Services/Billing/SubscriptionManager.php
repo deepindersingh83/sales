@@ -33,6 +33,13 @@ class SubscriptionManager
             return false;
         }
 
+        // Moving onto a capped tier with more members than it allows would
+        // leave the workspace over its limit; members must be removed first.
+        $cap = $this->tiers()[$tier]['max_payees'] ?? null;
+        if ($cap !== null && ! $workspace->onTrial() && $workspace->users()->count() > $cap) {
+            return false;
+        }
+
         // When Stripe is enabled this is where we would create/update the
         // subscription and only persist on webhook confirmation. In scaffold
         // mode we apply immediately.
@@ -45,12 +52,12 @@ class SubscriptionManager
     }
 
     /**
-     * Start a free trial (no-op if one is already active or the workspace is on
-     * a paid tier).
+     * Start the workspace's one free trial (no-op on a paid tier, or once a
+     * trial has ever been started — an expired trial cannot be restarted).
      */
     public function startTrial(Workspace $workspace): bool
     {
-        if ($workspace->onTrial() || $workspace->onPaidTier()) {
+        if ($workspace->trial_ends_at !== null || $workspace->onPaidTier()) {
             return false;
         }
 
