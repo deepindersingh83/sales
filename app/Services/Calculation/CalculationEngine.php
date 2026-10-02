@@ -86,10 +86,18 @@ class CalculationEngine
                     continue;
                 }
 
-                // Convert the transaction into the plan's currency (1:1 when they
-                // match or no rate exists).
+                // Convert the transaction into the plan's currency. Without a rate
+                // the transaction cannot be valued, so it is left uncredited.
                 $txDate = optional($tx->transaction_date)->toDateString();
-                $rate = $this->fx->rate($tx->currency, $planCurrency, $txDate) ?? 1.0;
+                if (! $this->fx->rateAvailable($tx->currency, $planCurrency, $txDate)) {
+                    $uncredited++;
+                    $this->log($run, 'fx_missing', $tx, null, $tx->metricValue($metric), null,
+                        "No {$tx->currency} to {$planCurrency} FX rate available; transaction not credited.",
+                        ['from' => $tx->currency, 'to' => $planCurrency, 'date' => $txDate]);
+
+                    continue;
+                }
+                $rate = $this->fx->rate($tx->currency, $planCurrency, $txDate);
 
                 // Exclude-tax basis: net the crediting value down by the plan tax rate.
                 $taxRate = $snapshot['plan']['tax_rate_percent'] ?? null;
