@@ -231,6 +231,36 @@ class ReportController extends Controller
             ['band' => ['Attainment band', 'text'], 'count' => ['Reps', 'number']], $rows, 'admin.reports.attainment-distribution');
     }
 
+    /** Per customer: revenue, how much is paid and how much is still outstanding. */
+    public function customers(Request $request, RevenueAnalytics $revenue): View|BaseStreamedResponse
+    {
+        $data = $request->validate([
+            'from' => ['nullable', 'date'],
+            'to' => ['nullable', 'date', 'after_or_equal:from'],
+            'sort' => ['nullable', 'in:revenue,outstanding,paid,customer'],
+        ]);
+
+        $from = isset($data['from']) ? Carbon::parse($data['from'])->startOfDay() : null;
+        $to = isset($data['to']) ? Carbon::parse($data['to'])->startOfDay() : null;
+        $sort = $data['sort'] ?? 'outstanding';
+
+        $rows = $revenue->breakdown('customer', $from, $to);
+        $rows = $sort === 'customer' ? $rows->sortBy('key')->values() : $rows->sortByDesc($sort)->values();
+
+        if ($request->query('export') === 'csv') {
+            return $this->csv('customer-balances.csv', ['Customer', 'Invoices', 'Revenue', 'Paid', 'Outstanding'],
+                $rows->map(fn ($r) => [$r['key'], $r['deals'], $r['revenue'], $r['paid'], $r['outstanding']]));
+        }
+
+        return view('admin.reports.customers', [
+            'rows' => $rows,
+            'kpis' => $revenue->kpis($from, $to),
+            'from' => $from?->toDateString(),
+            'to' => $to?->toDateString(),
+            'sort' => $sort,
+        ]);
+    }
+
     /** Revenue analytics across every imported transaction, by one of 10 dimensions. */
     public function revenue(Request $request, RevenueAnalytics $revenue): View|BaseStreamedResponse
     {
@@ -247,8 +277,8 @@ class ReportController extends Controller
         $label = RevenueAnalytics::DIMENSIONS[$dimension];
 
         if ($request->query('export') === 'csv') {
-            return $this->csv("revenue-by-{$dimension}.csv", [$label, 'Revenue', 'Profit', 'Deals', 'Share %'],
-                $rows->map(fn ($r) => [$r['key'], $r['revenue'], $r['profit'], $r['deals'], $r['share']]));
+            return $this->csv("revenue-by-{$dimension}.csv", [$label, 'Revenue', 'Paid', 'Outstanding', 'Profit', 'Deals', 'Share %'],
+                $rows->map(fn ($r) => [$r['key'], $r['revenue'], $r['paid'], $r['outstanding'], $r['profit'], $r['deals'], $r['share']]));
         }
 
         return view('admin.reports.revenue', [

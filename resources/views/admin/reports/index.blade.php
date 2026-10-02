@@ -2,6 +2,7 @@
     $groups = [
         'Dashboards & analytics' => [
             ['admin.reports.overview', '📊 Analytics dashboard', 'Revenue, payout, attainment & liability at a glance.'],
+            ['admin.reports.customers', 'Customer balances', 'Per customer: revenue, paid and outstanding — with a link to each customer\'s invoices.'],
             ['admin.reports.revenue', 'Revenue analytics', 'Revenue, profit & deals by month, quarter, year, customer, product, category, rep, source, currency or payment status.'],
         ],
         'Payout' => [

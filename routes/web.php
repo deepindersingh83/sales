@@ -189,6 +189,7 @@ Route::middleware(['auth', 'verified', 'workspace.admin'])
         Route::get('reports/attainment-by-team', [ReportController::class, 'attainmentByManager'])->name('reports.attainment-by-team');
         Route::get('reports/attainment-distribution', [ReportController::class, 'attainmentDistribution'])->name('reports.attainment-distribution');
         Route::get('reports/revenue', [ReportController::class, 'revenue'])->name('reports.revenue');
+        Route::get('reports/customers', [ReportController::class, 'customers'])->name('reports.customers');
 
         // Integrations catalogue (connector framework).
         Route::get('connectors', [ConnectorController::class, 'index'])->name('connectors.index');

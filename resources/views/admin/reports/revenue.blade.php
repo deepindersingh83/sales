@@ -49,6 +49,8 @@
                         <th class="px-6 py-3">{{ $label }}</th>
                         <th class="px-6 py-3 w-1/3"></th>
                         <th class="px-6 py-3 text-right">Revenue</th>
+                        <th class="px-6 py-3 text-right">Paid</th>
+                        <th class="px-6 py-3 text-right">Outstanding</th>
                         <th class="px-6 py-3 text-right">Profit</th>
                         <th class="px-6 py-3 text-right">Deals</th>
                         <th class="px-6 py-3 text-right">Share</th>
@@ -61,12 +63,14 @@
                                     <div class="h-2 rounded-full bg-slate-100 overflow-hidden"><div class="h-full bg-brand-500" style="width: {{ max(0, round($r['revenue'] / $maxRevenue * 100, 1)) }}%"></div></div>
                                 </td>
                                 <td class="px-6 py-3 text-right font-medium text-slate-900 tabular-nums">{{ number_format($r['revenue'], 2) }}</td>
+                                <td class="px-6 py-3 text-right text-emerald-700 tabular-nums">{{ number_format($r['paid'], 2) }}</td>
+                                <td class="px-6 py-3 text-right tabular-nums {{ $r['outstanding'] > 0 ? 'text-amber-700' : 'text-slate-400' }}">{{ number_format($r['outstanding'], 2) }}</td>
                                 <td class="px-6 py-3 text-right text-slate-600 tabular-nums">{{ number_format($r['profit'], 2) }}</td>
                                 <td class="px-6 py-3 text-right text-slate-600 tabular-nums">{{ $r['deals'] }}</td>
                                 <td class="px-6 py-3 text-right text-slate-600 tabular-nums">{{ number_format($r['share'], 1) }}%</td>
                             </tr>
                         @empty
-                            <tr><td colspan="6" class="px-6 py-8 text-center text-slate-500">No transactions in this range.</td></tr>
+                            <tr><td colspan="8" class="px-6 py-8 text-center text-slate-500">No transactions in this range.</td></tr>
                         @endforelse
                     </tbody>
                 </table>

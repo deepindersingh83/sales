@@ -30,7 +30,7 @@ class RevenueAnalytics
         'rep' => 'Sales rep (credited)',
         'source' => 'Data source',
         'currency' => 'Original currency',
-        'payment' => 'Payment status',
+        'payment' => 'Payment status (paid / part-paid / unpaid)',
     ];
 
     public function __construct(
@@ -48,7 +48,7 @@ class RevenueAnalytics
      * Headline KPIs for the range, with growth against the equally long
      * preceding range when both bounds are given.
      *
-     * @return array{revenue:float, profit:float, margin:?float, deals:int, average_deal:float, customers:int, growth:?float, currency:string}
+     * @return array{revenue:float, paid:float, outstanding:float, profit:float, margin:?float, deals:int, average_deal:float, customers:int, growth:?float, currency:string}
      */
     public function kpis(?Carbon $from = null, ?Carbon $to = null): array
     {
@@ -67,6 +67,8 @@ class RevenueAnalytics
 
         return [
             'revenue' => $revenue,
+            'paid' => round($rows->sum('paid'), 2),
+            'outstanding' => round($rows->sum('outstanding'), 2),
             'profit' => $profit,
             'margin' => $profitBase > 0 ? round($profit / $profitBase * 100, 1) : null,
             'deals' => $rows->count(),
@@ -81,7 +83,7 @@ class RevenueAnalytics
      * Revenue grouped by one dimension. Time dimensions sort chronologically;
      * the rest sort by revenue, largest first.
      *
-     * @return Collection<int, array{key:string, revenue:float, profit:float, deals:int, share:float}>
+     * @return Collection<int, array{key:string, revenue:float, paid:float, outstanding:float, profit:float, deals:int, share:float}>
      */
     public function breakdown(string $dimension, ?Carbon $from = null, ?Carbon $to = null): Collection
     {
@@ -101,6 +103,8 @@ class RevenueAnalytics
         $result = $grouped->map(fn (Collection $group, $key) => [
             'key' => (string) ($key === '' ? '—' : $key),
             'revenue' => round($group->sum('revenue'), 2),
+            'paid' => round($group->sum('paid'), 2),
+            'outstanding' => round($group->sum('outstanding'), 2),
             'profit' => round($group->sum('profit'), 2),
             'deals' => $group->pluck('id')->unique()->count(),
             'share' => round($group->sum('revenue') / $total * 100, 1),
@@ -133,9 +137,14 @@ class RevenueAnalytics
                 $product = (string) (data_get($t->raw_data, 'product') ?? data_get($t->raw_data, 'sku') ?? '');
                 $convert = fn (float $v) => $this->fx->convert($v, $t->currency ?: $base, $base, $dateString);
 
+                $revenue = $convert((float) $t->amount);
+                $outstanding = $revenue * $t->outstandingFraction();
+
                 return [
                     'id' => $t->id,
-                    'revenue' => $convert((float) $t->amount),
+                    'revenue' => $revenue,
+                    'paid' => $revenue - $outstanding,
+                    'outstanding' => $outstanding,
                     'profit' => $t->profit_amount !== null ? $convert((float) $t->profit_amount) : null,
                     'month' => $date->format('Y-m'),
                     'quarter' => $date->format('Y').'-Q'.$date->quarter,
@@ -145,7 +154,7 @@ class RevenueAnalytics
                     'category' => (string) ($categories[$product] ?? data_get($t->raw_data, 'category') ?? ''),
                     'source' => $t->source_system,
                     'currency' => $t->currency,
-                    'payment' => $t->is_paid ? 'Paid' : 'Unpaid',
+                    'payment' => $t->paymentStatus(),
                 ];
             });
     }
@@ -179,6 +188,8 @@ class RevenueAnalytics
                 return array_merge($row, [
                     'key' => $userCredits->first()->user?->name ?? 'Unknown',
                     'revenue' => $row['revenue'] * $fraction,
+                    'paid' => $row['paid'] * $fraction,
+                    'outstanding' => $row['outstanding'] * $fraction,
                     'profit' => $row['profit'] !== null ? $row['profit'] * $fraction : null,
                 ]);
             })->values();
