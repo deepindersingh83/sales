@@ -27,7 +27,7 @@ class AuthenticateApiToken
             return $this->unauthorized('Missing API token.');
         }
 
-        $workspace = Workspace::where('api_token', $token)->first();
+        $workspace = Workspace::findByApiToken($token);
 
         if (! $workspace) {
             return $this->unauthorized('Invalid API token.');

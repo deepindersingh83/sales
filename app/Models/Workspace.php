@@ -87,14 +87,27 @@ class Workspace extends Model
     }
 
     /**
-     * Generate (or regenerate) this workspace's API token and return it.
+     * Generate (or regenerate) this workspace's API token and return it. Only
+     * a SHA-256 hash is stored, so a database leak exposes no usable token;
+     * the plain token is shown to the admin once.
      */
     public function regenerateApiToken(): string
     {
         $token = 'wsk_'.Str::random(48);
-        $this->forceFill(['api_token' => $token])->save();
+        $this->forceFill(['api_token' => static::hashApiToken($token)])->save();
 
         return $token;
+    }
+
+    public static function hashApiToken(string $token): string
+    {
+        return hash('sha256', $token);
+    }
+
+    /** The workspace a presented API token belongs to, if any. */
+    public static function findByApiToken(string $token): ?self
+    {
+        return static::where('api_token', static::hashApiToken($token))->first();
     }
 
     protected static function booted(): void
