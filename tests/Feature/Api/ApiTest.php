@@ -69,4 +69,13 @@ class ApiTest extends TestCase
             ->assertJsonPath('meta.total', 1)
             ->assertJsonPath('data.0.amount', 500);
     }
+
+    public function test_payouts_feed_rejects_nonsense_page_sizes_gracefully(): void
+    {
+        $ws = Workspace::factory()->create();
+        $token = $ws->regenerateApiToken();
+
+        $this->withToken($token)->getJson('/api/v1/payouts?per_page=-1')->assertOk();
+        $this->withToken($token)->getJson('/api/v1/payouts?per_page=0')->assertOk();
+    }
 }

@@ -18,7 +18,7 @@ class PayoutFeedController extends Controller
         $rewards = Reward::released()
             ->with(['user:id,name', 'plan:id,name'])
             ->orderByDesc('id')
-            ->paginate(min((int) $request->integer('per_page', 100), 500));
+            ->paginate(max(1, min($request->integer('per_page', 100), 500)));
 
         return response()->json([
             'data' => $rewards->getCollection()->map(fn (Reward $r) => [
