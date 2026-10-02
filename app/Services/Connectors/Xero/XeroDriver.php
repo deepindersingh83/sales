@@ -5,6 +5,7 @@ namespace App\Services\Connectors\Xero;
 use App\Contracts\ImportSourceDriver;
 use App\Models\ImportSource;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 
 /**
@@ -125,7 +126,14 @@ class XeroDriver implements ImportSourceDriver
         return null;
     }
 
-    /** Return a valid access token, refreshing (and persisting) it when near expiry. */
+    /**
+     * Return a valid access token, refreshing it when near expiry.
+     *
+     * One Xero consent (a "grant") covers every organisation authorised in it,
+     * and its refresh token rotates on each use. All sources on the same grant
+     * therefore share tokens: a sibling's newer tokens are adopted before
+     * refreshing, and refreshed tokens are written to every sibling.
+     */
     protected function freshAccessToken(ImportSource $source): string
     {
         $credentials = $source->credentials ?? [];
@@ -134,15 +142,58 @@ class XeroDriver implements ImportSourceDriver
             throw new \RuntimeException('Xero connection is incomplete — reconnect Xero.');
         }
 
-        $expiresAt = isset($credentials['expires_at']) ? Carbon::parse($credentials['expires_at']) : null;
+        $siblings = $this->grantSiblings($source);
+        $newest = $siblings->map(fn (ImportSource $s) => $s->credentials)
+            ->push($credentials)
+            ->sortByDesc(fn (array $c) => $c['expires_at'] ?? '')
+            ->first();
+        $tokens = array_intersect_key($newest, array_flip(['access_token', 'refresh_token', 'expires_at']));
 
-        if ($expiresAt && $expiresAt->gt(now()->addSeconds(self::TOKEN_LEEWAY_SECONDS))) {
-            return $credentials['access_token'];
+        if ($this->isValid($tokens)) {
+            if ($tokens['access_token'] !== $credentials['access_token']) {
+                $source->forceFill(['credentials' => array_merge($credentials, $tokens)])->save();
+            }
+
+            return $tokens['access_token'];
         }
 
-        $tokens = $this->client->refresh($credentials['refresh_token']);
-        $source->forceFill(['credentials' => array_merge($credentials, $tokens)])->save();
+        $tokens = $this->client->refresh($tokens['refresh_token']);
+
+        foreach ($siblings->push($source) as $grantSource) {
+            $grantSource->forceFill(['credentials' => array_merge($grantSource->credentials, $tokens)])->save();
+        }
 
         return $tokens['access_token'];
+    }
+
+    /**
+     * Other Xero sources in the workspace authorised by the same consent.
+     *
+     * @return Collection<int, ImportSource>
+     */
+    protected function grantSiblings(ImportSource $source): Collection
+    {
+        $grantId = $source->credentials['grant_id'] ?? null;
+
+        if ($grantId === null) {
+            return collect();
+        }
+
+        return ImportSource::query()
+            ->where('workspace_id', $source->workspace_id)
+            ->where('type', 'xero')
+            ->whereKeyNot($source->getKey())
+            ->get()
+            ->filter(fn (ImportSource $s) => ($s->credentials['grant_id'] ?? null) === $grantId)
+            ->values();
+    }
+
+    /**
+     * @param  array<string, mixed>  $tokens
+     */
+    protected function isValid(array $tokens): bool
+    {
+        return isset($tokens['expires_at'], $tokens['access_token'])
+            && Carbon::parse($tokens['expires_at'])->gt(now()->addSeconds(self::TOKEN_LEEWAY_SECONDS));
     }
 }

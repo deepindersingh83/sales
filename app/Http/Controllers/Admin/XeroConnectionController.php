@@ -65,7 +65,9 @@ class XeroConnectionController extends Controller
             return $this->fail('No Xero organisation was authorised.');
         }
 
-        // One recurring source per organisation; reconnecting refreshes tokens.
+        // Every organisation in this consent shares one rotating token grant.
+        $tokens['grant_id'] = (string) Str::uuid();
+
         foreach ($tenants as $tenant) {
             $source = ImportSource::where('type', 'xero')->get()
                 ->first(fn (ImportSource $s) => ($s->config['tenant_id'] ?? null) === $tenant['tenantId'])

@@ -242,6 +242,31 @@ class XeroConnectorTest extends TestCase
         Http::assertSent(fn (Request $r) => str_contains($r->url(), 'Invoices') && $r->hasHeader('Authorization', 'Bearer access-2'));
     }
 
+    public function test_refresh_rotates_the_token_for_every_organisation_on_the_grant(): void
+    {
+        $ws = Workspace::factory()->create();
+        $expired = ['expires_at' => now()->subMinute()->toIso8601String(), 'grant_id' => 'G-1'];
+        $first = $this->connectedSource($ws, $expired);
+        $second = $this->connectedSource($ws, $expired + ['tenant_id' => 'T-2']);
+        $otherGrant = $this->connectedSource($ws, ['grant_id' => 'G-2', 'refresh_token' => 'other-refresh']);
+
+        Http::fake([
+            XeroClient::TOKEN_URL => Http::sequence()
+                ->push(['access_token' => 'access-2', 'refresh_token' => 'refresh-2', 'expires_in' => 1800])
+                ->whenEmpty(Http::response(['error' => 'invalid_grant'], 400)),
+            'api.xero.com/api.xro/2.0/Invoices*' => Http::response(['Invoices' => []]),
+        ]);
+
+        app(ScheduledImportRunner::class)->run($first);
+        app(ScheduledImportRunner::class)->run($second->fresh());
+
+        // The second organisation adopted the rotated token instead of reusing the spent one.
+        Http::assertSentCount(3);
+        $this->assertSame('refresh-2', $second->fresh()->credentials['refresh_token']);
+        $this->assertSame('T-2', $second->fresh()->credentials['tenant_id']);
+        $this->assertSame('other-refresh', $otherGrant->fresh()->credentials['refresh_token']);
+    }
+
     public function test_failed_sync_records_the_error_and_keeps_the_cursor(): void
     {
         $ws = Workspace::factory()->create();
