@@ -9,6 +9,7 @@ use App\Models\Plan;
 use App\Models\Reward;
 use App\Models\Transaction;
 use App\Support\WorkspaceContext;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 
 /**
@@ -34,7 +35,28 @@ class ReportBuilder
         ['≥ 125%', 125, PHP_INT_MAX],
     ];
 
-    public function __construct(protected WorkspaceContext $context) {}
+    public function __construct(
+        protected WorkspaceContext $context,
+        protected ReportScope $scope,
+    ) {}
+
+    /** Released rewards on plans the viewer may see. */
+    protected function releasedRewards(): Builder
+    {
+        return $this->scope->rewards(Reward::released());
+    }
+
+    /** Released credits on plans the viewer may see. */
+    protected function releasedCredits(): Builder
+    {
+        return $this->scope->credits(Credit::released());
+    }
+
+    /** Earned-but-unreleased rewards (liability) on plans the viewer may see. */
+    protected function accruedRewards(): Builder
+    {
+        return $this->scope->rewards(Reward::whereIn('status', [PayoutStatus::Pending, PayoutStatus::Reviewed]));
+    }
 
     /**
      * Total released payout per user.
@@ -43,7 +65,7 @@ class ReportBuilder
      */
     public function payoutByUser(): Collection
     {
-        return Reward::released()
+        return $this->releasedRewards()
             ->with('user')
             ->get()
             ->groupBy('user_id')
@@ -63,7 +85,7 @@ class ReportBuilder
      */
     public function payoutByPlan(): Collection
     {
-        return Reward::released()
+        return $this->releasedRewards()
             ->with('plan')
             ->get()
             ->groupBy('plan_id')
@@ -84,7 +106,7 @@ class ReportBuilder
      */
     public function creditingByField(string $field): Collection
     {
-        return Credit::released()
+        return $this->releasedCredits()
             ->with('transaction')
             ->get()
             ->groupBy(fn (Credit $c) => (string) data_get($c->transaction?->raw_data, $field, '—'))
@@ -105,7 +127,7 @@ class ReportBuilder
      */
     public function creditingFieldOptions(): array
     {
-        $keys = Credit::released()
+        $keys = $this->releasedCredits()
             ->with('transaction')
             ->get()
             ->flatMap(fn (Credit $c) => array_keys($c->transaction?->raw_data ?? []))
@@ -137,7 +159,7 @@ class ReportBuilder
             'source' => fn (Credit $c) => $c->transaction?->source_system ?? '—',
         };
 
-        $rows = Credit::released()
+        $rows = $this->releasedCredits()
             ->with(['user:id,name', 'calcRun.plan:id,name', 'transaction'])
             ->get()
             ->groupBy($key)
@@ -174,10 +196,10 @@ class ReportBuilder
      */
     public function attainmentByUser(): Collection
     {
-        $payouts = Reward::released()->get()->groupBy('user_id')
+        $payouts = $this->releasedRewards()->get()->groupBy('user_id')
             ->map(fn ($r) => (float) $r->sum('computed_amount'));
 
-        return Credit::released()->with('user')->get()
+        return $this->releasedCredits()->with('user')->get()
             ->groupBy('user_id')
             ->map(fn ($rows, $userId) => [
                 'user' => $rows->first()->user?->name ?? 'Unknown',
@@ -198,7 +220,7 @@ class ReportBuilder
     {
         $plans = Plan::whereNotNull('quota')->where('quota', '>', 0)->get()->keyBy('id');
 
-        return Credit::released()
+        return $this->releasedCredits()
             ->with(['user:id,name', 'calcRun:id,plan_id'])
             ->get()
             ->filter(fn (Credit $c) => $plans->has($c->calcRun?->plan_id))
@@ -229,10 +251,10 @@ class ReportBuilder
     public function attainmentByPlan(): Collection
     {
         $quota = $this->quotaAttainment()->groupBy('plan');
-        $payouts = Reward::released()->get()->groupBy('plan_id')
+        $payouts = $this->releasedRewards()->get()->groupBy('plan_id')
             ->map(fn ($r) => (float) $r->sum('computed_amount'));
 
-        return Credit::released()
+        return $this->releasedCredits()
             ->with('calcRun.plan:id,name')
             ->get()
             ->groupBy(fn (Credit $c) => $c->calcRun?->plan_id)
@@ -268,8 +290,8 @@ class ReportBuilder
         $names = $members->pluck('name', 'id');
         $managerOf = $members->mapWithKeys(fn ($u) => [$u->id => $u->pivot->manager_id]);
 
-        $credited = Credit::released()->get()->groupBy('user_id')->map(fn ($r) => (float) $r->sum('credited_amount'));
-        $paid = Reward::released()->get()->groupBy('user_id')->map(fn ($r) => (float) $r->sum('computed_amount'));
+        $credited = $this->releasedCredits()->get()->groupBy('user_id')->map(fn ($r) => (float) $r->sum('credited_amount'));
+        $paid = $this->releasedRewards()->get()->groupBy('user_id')->map(fn ($r) => (float) $r->sum('computed_amount'));
 
         return $managerOf->filter()
             ->groupBy(fn ($managerId) => $managerId, preserveKeys: true)
@@ -305,7 +327,7 @@ class ReportBuilder
      */
     public function payoutByType(): Collection
     {
-        return Reward::released()->whereNotNull('computed_amount')->get()
+        return $this->releasedRewards()->whereNotNull('computed_amount')->get()
             ->groupBy(fn (Reward $r) => $r->reward_type->value)
             ->map(fn ($rows, $type) => [
                 'type' => RewardType::from($type)->label(),
@@ -322,7 +344,7 @@ class ReportBuilder
      */
     public function payoutByMonth(): Collection
     {
-        return Reward::released()->whereNotNull('computed_amount')->get()
+        return $this->releasedRewards()->whereNotNull('computed_amount')->get()
             ->groupBy(fn (Reward $r) => $r->created_at->format('Y-m'))
             ->map(fn ($rows, $month) => [
                 'month' => $month,
@@ -340,7 +362,7 @@ class ReportBuilder
      */
     public function liabilityByUser(): Collection
     {
-        return Reward::whereIn('status', [PayoutStatus::Pending, PayoutStatus::Reviewed])
+        return $this->accruedRewards()
             ->whereNotNull('computed_amount')
             ->with('user')
             ->get()
@@ -355,18 +377,17 @@ class ReportBuilder
 
     public function totalLiability(): float
     {
-        return round((float) Reward::whereIn('status', [PayoutStatus::Pending, PayoutStatus::Reviewed])
+        return round((float) $this->accruedRewards()
             ->sum('computed_amount'), 2);
     }
 
     public function totalReleasedPayout(): float
     {
-        return round((float) Reward::released()->sum('computed_amount'), 2);
+        return round((float) $this->releasedRewards()->sum('computed_amount'), 2);
     }
 
     public function hasReleasedData(): bool
     {
-        return Credit::where('status', PayoutStatus::Released)->exists()
-            || Reward::where('status', PayoutStatus::Released)->exists();
+        return $this->releasedCredits()->exists() || $this->releasedRewards()->exists();
     }
 }

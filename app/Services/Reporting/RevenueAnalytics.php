@@ -36,6 +36,7 @@ class RevenueAnalytics
     public function __construct(
         protected WorkspaceContext $context,
         protected FxConverter $fx,
+        protected ReportScope $scope,
     ) {}
 
     public function baseCurrency(): string
@@ -158,7 +159,7 @@ class RevenueAnalytics
      */
     protected function repRows(Collection $rows): Collection
     {
-        $credits = Credit::where('status', PayoutStatus::Released)
+        $credits = $this->scope->credits(Credit::where('status', PayoutStatus::Released))
             ->whereIn('transaction_id', $rows->pluck('id'))
             ->with('user:id,name')
             ->get()

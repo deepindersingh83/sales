@@ -170,6 +170,29 @@ class EnterpriseReportingTest extends TestCase
         $this->get(route('admin.reports.revenue', ['from' => '2026-09-01', 'to' => '2026-08-01']))->assertSessionHasErrors('to');
     }
 
+    public function test_reports_omit_plans_hidden_from_a_limited_admin(): void
+    {
+        [$ws, , , $plan] = $this->seedScenario();
+        $limited = $this->actingAsMember($ws, Role::LimitedAdmin);
+        $plan->hiddenFromUsers()->attach($limited->id);
+
+        $this->get(route('admin.reports.quota-attainment'))->assertOk()->assertDontSee('Enterprise AE');
+        $this->get(route('admin.reports.payout-by-plan'))->assertOk()->assertDontSee('Enterprise AE');
+        $this->get(route('admin.reports.overview'))->assertOk()->assertDontSee('150.00');
+
+        $csv = $this->get(route('admin.reports.attainment-by-plan', ['export' => 'csv']))->streamedContent();
+        $this->assertStringNotContainsString('Enterprise AE', $csv);
+    }
+
+    public function test_full_admin_still_sees_every_plan(): void
+    {
+        [$ws, , , $plan] = $this->seedScenario();
+        $plan->hiddenFromUsers()->attach($this->makeMember($ws, Role::LimitedAdmin)->id);
+        $this->actingAsMember($ws, Role::FullAdmin);
+
+        $this->get(route('admin.reports.quota-attainment'))->assertOk()->assertSee('Enterprise AE');
+    }
+
     public function test_participants_cannot_open_reports(): void
     {
         [$ws] = $this->seedScenario();
