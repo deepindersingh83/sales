@@ -3,9 +3,11 @@
 namespace Tests\Feature\Calculation;
 
 use App\Actions\StartCalcRun;
+use App\Enums\CalcRunStatus;
 use App\Enums\PayoutStatus;
 use App\Enums\Role;
 use App\Models\Alias;
+use App\Models\CalcRun;
 use App\Models\Credit;
 use App\Models\Plan;
 use App\Models\Transaction;
@@ -74,5 +76,40 @@ class CalcControlsTest extends TestCase
         $this->post(route('admin.calc-runs.approve', $run))->assertRedirect();
         $this->post(route('admin.calc-runs.credits.transition', $run), ['action' => 'release']);
         $this->assertSame(1, Credit::where('calc_run_id', $run->id)->where('status', PayoutStatus::Released)->count());
+    }
+
+    public function test_only_a_completed_unapproved_run_can_be_approved(): void
+    {
+        $ws = Workspace::factory()->create();
+        [$plan] = $this->base($ws);
+        $running = CalcRun::create(['workspace_id' => $ws->id, 'plan_id' => $plan->id, 'status' => CalcRunStatus::Running]);
+        $approvedAt = now()->subDay()->startOfSecond();
+        $approved = CalcRun::create(['workspace_id' => $ws->id, 'plan_id' => $plan->id, 'status' => CalcRunStatus::Completed, 'approved_at' => $approvedAt]);
+
+        $this->actingAsMember($ws, Role::FullAdmin);
+
+        $this->post(route('admin.calc-runs.approve', $running))->assertSessionHasErrors('approval');
+        $this->assertNull($running->fresh()->approved_at);
+
+        $this->post(route('admin.calc-runs.approve', $approved))->assertSessionHasErrors('approval');
+        $this->assertTrue($approved->fresh()->approved_at->equalTo($approvedAt));
+    }
+
+    public function test_adding_an_adjustment_revokes_the_run_approval(): void
+    {
+        $ws = Workspace::factory()->create();
+        [$plan, $rep] = $this->base($ws);
+        $run = CalcRun::create(['workspace_id' => $ws->id, 'plan_id' => $plan->id, 'status' => CalcRunStatus::Completed]);
+
+        $admin = $this->actingAsMember($ws, Role::FullAdmin);
+        $run->update(['approved_at' => now(), 'approved_by_user_id' => $admin->id]);
+
+        $this->post(route('admin.calc-runs.adjustments.store', $run), [
+            'user_id' => $rep->id, 'amount' => 250, 'reason' => 'Late deal',
+        ])->assertRedirect();
+
+        $run->refresh();
+        $this->assertNull($run->approved_at);
+        $this->assertNull($run->approved_by_user_id);
     }
 }

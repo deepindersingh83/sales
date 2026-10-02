@@ -71,6 +71,9 @@ class CalcRunReleaseController extends Controller
             'status' => PayoutStatus::Pending->value,
         ]);
 
+        // The run's numbers changed, so any earlier approval no longer covers them.
+        $calcRun->update(['approved_at' => null, 'approved_by_user_id' => null]);
+
         return redirect()->route('admin.calc-runs.rewards.index', $calcRun)->with('status', 'Adjustment added.');
     }
 
