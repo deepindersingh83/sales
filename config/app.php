@@ -68,6 +68,14 @@ return [
     'timezone' => 'UTC',
 
     /*
+    | Day/month order assumed for ambiguous imported dates such as 03/04/2026:
+    | "dmy" (3 April — AU/UK/EU) or "mdy" (4 March — US). Dates with a part
+    | above 12, and ISO dates (2026-04-03), are always read correctly.
+    */
+
+    'import_date_order' => env('IMPORT_DATE_ORDER', 'dmy'),
+
+    /*
     |--------------------------------------------------------------------------
     | Application Locale Configuration
     |--------------------------------------------------------------------------
