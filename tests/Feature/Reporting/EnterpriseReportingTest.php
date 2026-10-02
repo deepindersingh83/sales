@@ -129,6 +129,49 @@ class EnterpriseReportingTest extends TestCase
         $this->assertEqualsWithDelta(75.0, $reports->attainmentByPlan()[0]['avg_attainment'], 0.01);
     }
 
+    public function test_cross_plan_payout_totals_are_converted_to_base_currency(): void
+    {
+        [$ws, $alice] = $this->seedScenario();
+        $eurPlan = Plan::factory()->for($ws)->create(['name' => 'EU Plan', 'currency' => 'EUR']);
+        $run = CalcRun::create(['workspace_id' => $ws->id, 'plan_id' => $eurPlan->id, 'status' => 'completed']);
+        Reward::create(['workspace_id' => $ws->id, 'calc_run_id' => $run->id, 'user_id' => $alice->id, 'plan_id' => $eurPlan->id,
+            'reward_type' => 'commission', 'computed_amount' => 100, 'currency' => 'EUR', 'status' => PayoutStatus::Released]);
+        $reports = app(ReportBuilder::class);
+
+        // 150 USD + 100 EUR × 1.5 = 300 USD, not 250 of mixed units.
+        $this->assertEqualsWithDelta(300.0, $reports->totalReleasedPayout(), 0.01);
+        $this->assertEqualsWithDelta(300.0, $reports->payoutByUser()[0]['total'], 0.01);
+        $this->assertSame('USD', $reports->payoutByUser()[0]['currency']);
+    }
+
+    public function test_plans_sharing_a_name_keep_their_own_average_attainment(): void
+    {
+        [$ws, , $bob, $plan] = $this->seedScenario();
+        $twin = Plan::factory()->for($ws)->create(['name' => $plan->name, 'quota' => 1000]);
+        $run = CalcRun::create(['workspace_id' => $ws->id, 'plan_id' => $twin->id, 'status' => 'completed']);
+        $tx = Transaction::where('external_id', 'C')->sole();
+        Credit::create(['workspace_id' => $ws->id, 'calc_run_id' => $run->id, 'transaction_id' => $tx->id, 'user_id' => $bob->id,
+            'credited_amount' => 200, 'currency' => 'USD', 'status' => PayoutStatus::Released]);
+
+        $averages = app(ReportBuilder::class)->attainmentByPlan()->pluck('avg_attainment')->sort()->values()->all();
+
+        $this->assertSame([20.0, 75.0], $averages); // Bob 200/1000; Alice 1500/2000
+    }
+
+    public function test_net_negative_attainment_counts_in_the_lowest_band(): void
+    {
+        [$ws, , $bob, $plan] = $this->seedScenario();
+        $run = CalcRun::create(['workspace_id' => $ws->id, 'plan_id' => $plan->id, 'status' => 'completed']);
+        $tx = Transaction::where('external_id', 'C')->sole();
+        Credit::create(['workspace_id' => $ws->id, 'calc_run_id' => $run->id, 'transaction_id' => $tx->id, 'user_id' => $bob->id,
+            'credited_amount' => -200, 'currency' => 'USD', 'status' => PayoutStatus::Released]);
+
+        $bands = app(ReportBuilder::class)->attainmentDistribution()->keyBy('band');
+
+        $this->assertSame(1, $bands['< 50%']['count']);
+        $this->assertSame(2, $bands->sum('count'));
+    }
+
     public function test_crediting_by_rep_and_uncredited_transactions(): void
     {
         $this->seedScenario();

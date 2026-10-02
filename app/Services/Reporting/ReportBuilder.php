@@ -8,13 +8,15 @@ use App\Models\Credit;
 use App\Models\Plan;
 use App\Models\Reward;
 use App\Models\Transaction;
+use App\Services\Calculation\FxConverter;
 use App\Support\WorkspaceContext;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 
 /**
- * Aggregations for the built-in MVP reports. All figures are on RELEASED data
- * (final payouts/credits), matching what reps and finance actually see.
+ * Aggregations for the built-in reports. All figures are on RELEASED data
+ * (final payouts/credits), matching what reps and finance actually see, and
+ * cross-plan totals are converted into the workspace base currency.
  */
 class ReportBuilder
 {
@@ -28,7 +30,7 @@ class ReportBuilder
 
     /** Quota-attainment bands for the distribution report, [label, from%, to%). */
     public const ATTAINMENT_BANDS = [
-        ['< 50%', 0, 50],
+        ['< 50%', PHP_INT_MIN, 50],
         ['50–75%', 50, 75],
         ['75–100%', 75, 100],
         ['100–125%', 100, 125],
@@ -38,7 +40,32 @@ class ReportBuilder
     public function __construct(
         protected WorkspaceContext $context,
         protected ReportScope $scope,
+        protected FxConverter $fx,
     ) {}
+
+    public function baseCurrency(): string
+    {
+        return $this->context->get()?->base_currency ?: 'USD';
+    }
+
+    /**
+     * Sum an amount column across rows that may be in different currencies,
+     * converting each into the workspace base currency at its own date.
+     *
+     * @param  Collection<int, Credit|Reward>  $rows
+     */
+    protected function money(Collection $rows, string $field): float
+    {
+        $base = $this->baseCurrency();
+        $this->fx->forWorkspace((int) $this->context->id());
+
+        return (float) $rows->sum(fn (Credit|Reward $row) => $this->fx->convert(
+            (float) $row->{$field},
+            $row->currency ?: $base,
+            $base,
+            $row->created_at?->toDateString(),
+        ));
+    }
 
     /** Released rewards on plans the viewer may see. */
     protected function releasedRewards(): Builder
@@ -71,8 +98,8 @@ class ReportBuilder
             ->groupBy('user_id')
             ->map(fn ($rows) => [
                 'user' => $rows->first()->user?->name ?? 'Unknown',
-                'total' => round((float) $rows->sum('computed_amount'), 2),
-                'currency' => $rows->first()->currency,
+                'total' => round($this->money($rows, 'computed_amount'), 2),
+                'currency' => $this->baseCurrency(),
             ])
             ->sortByDesc('total')
             ->values();
@@ -91,8 +118,8 @@ class ReportBuilder
             ->groupBy('plan_id')
             ->map(fn ($rows) => [
                 'plan' => $rows->first()->plan?->name ?? 'Unknown',
-                'total' => round((float) $rows->sum('computed_amount'), 2),
-                'currency' => $rows->first()->currency,
+                'total' => round($this->money($rows, 'computed_amount'), 2),
+                'currency' => $this->baseCurrency(),
             ])
             ->sortByDesc('total')
             ->values();
@@ -112,7 +139,7 @@ class ReportBuilder
             ->groupBy(fn (Credit $c) => (string) data_get($c->transaction?->raw_data, $field, '—'))
             ->map(fn ($rows, $key) => [
                 'key' => $key === '' ? '—' : $key,
-                'total' => round((float) $rows->sum('credited_amount'), 2),
+                'total' => round($this->money($rows, 'credited_amount'), 2),
                 'count' => $rows->count(),
             ])
             ->sortByDesc('total')
@@ -165,7 +192,7 @@ class ReportBuilder
             ->groupBy($key)
             ->map(fn ($rows, $k) => [
                 'key' => (string) $k,
-                'total' => round((float) $rows->sum('credited_amount'), 2),
+                'total' => round($this->money($rows, 'credited_amount'), 2),
                 'count' => $rows->count(),
             ]);
 
@@ -197,13 +224,13 @@ class ReportBuilder
     public function attainmentByUser(): Collection
     {
         $payouts = $this->releasedRewards()->get()->groupBy('user_id')
-            ->map(fn ($r) => (float) $r->sum('computed_amount'));
+            ->map(fn ($r) => $this->money($r, 'computed_amount'));
 
         return $this->releasedCredits()->with('user')->get()
             ->groupBy('user_id')
             ->map(fn ($rows, $userId) => [
                 'user' => $rows->first()->user?->name ?? 'Unknown',
-                'credited' => round((float) $rows->sum('credited_amount'), 2),
+                'credited' => round($this->money($rows, 'credited_amount'), 2),
                 'payout' => round((float) ($payouts[$userId] ?? 0), 2),
             ])
             ->sortByDesc('credited')
@@ -214,7 +241,9 @@ class ReportBuilder
      * Quota attainment per rep per plan: released credited amount from that
      * plan's runs against the plan quota. Plans without a quota are skipped.
      *
-     * @return Collection<int, array{user_id:int, user:string, plan:string, credited:float, quota:float, attainment:float}>
+     * Amounts stay in the plan's own currency, which is the currency of its quota.
+     *
+     * @return Collection<int, array{user_id:int, user:string, plan_id:int, plan:string, credited:float, quota:float, attainment:float}>
      */
     public function quotaAttainment(): Collection
     {
@@ -232,6 +261,7 @@ class ReportBuilder
                 return [
                     'user_id' => (int) $rows->first()->user_id,
                     'user' => $rows->first()->user?->name ?? 'Unknown',
+                    'plan_id' => $plan->id,
                     'plan' => $plan->name,
                     'credited' => round($credited, 2),
                     'quota' => round((float) $plan->quota, 2),
@@ -250,9 +280,9 @@ class ReportBuilder
      */
     public function attainmentByPlan(): Collection
     {
-        $quota = $this->quotaAttainment()->groupBy('plan');
+        $quota = $this->quotaAttainment()->groupBy('plan_id');
         $payouts = $this->releasedRewards()->get()->groupBy('plan_id')
-            ->map(fn ($r) => (float) $r->sum('computed_amount'));
+            ->map(fn ($r) => $this->money($r, 'computed_amount'));
 
         return $this->releasedCredits()
             ->with('calcRun.plan:id,name')
@@ -264,9 +294,9 @@ class ReportBuilder
                 return [
                     'plan' => $name,
                     'reps' => $rows->pluck('user_id')->unique()->count(),
-                    'credited' => round((float) $rows->sum('credited_amount'), 2),
+                    'credited' => round($this->money($rows, 'credited_amount'), 2),
                     'payout' => round((float) ($payouts[$planId] ?? 0), 2),
-                    'avg_attainment' => isset($quota[$name]) ? round($quota[$name]->avg('attainment'), 1) : null,
+                    'avg_attainment' => isset($quota[$planId]) ? round($quota[$planId]->avg('attainment'), 1) : null,
                 ];
             })
             ->sortByDesc('credited')
@@ -290,8 +320,8 @@ class ReportBuilder
         $names = $members->pluck('name', 'id');
         $managerOf = $members->mapWithKeys(fn ($u) => [$u->id => $u->pivot->manager_id]);
 
-        $credited = $this->releasedCredits()->get()->groupBy('user_id')->map(fn ($r) => (float) $r->sum('credited_amount'));
-        $paid = $this->releasedRewards()->get()->groupBy('user_id')->map(fn ($r) => (float) $r->sum('computed_amount'));
+        $credited = $this->releasedCredits()->get()->groupBy('user_id')->map(fn ($r) => $this->money($r, 'credited_amount'));
+        $paid = $this->releasedRewards()->get()->groupBy('user_id')->map(fn ($r) => $this->money($r, 'computed_amount'));
 
         return $managerOf->filter()
             ->groupBy(fn ($managerId) => $managerId, preserveKeys: true)
@@ -331,7 +361,7 @@ class ReportBuilder
             ->groupBy(fn (Reward $r) => $r->reward_type->value)
             ->map(fn ($rows, $type) => [
                 'type' => RewardType::from($type)->label(),
-                'total' => round((float) $rows->sum('computed_amount'), 2),
+                'total' => round($this->money($rows, 'computed_amount'), 2),
             ])
             ->sortByDesc('total')
             ->values();
@@ -348,7 +378,7 @@ class ReportBuilder
             ->groupBy(fn (Reward $r) => $r->created_at->format('Y-m'))
             ->map(fn ($rows, $month) => [
                 'month' => $month,
-                'total' => round((float) $rows->sum('computed_amount'), 2),
+                'total' => round($this->money($rows, 'computed_amount'), 2),
             ])
             ->sortBy('month')
             ->values();
@@ -369,7 +399,7 @@ class ReportBuilder
             ->groupBy('user_id')
             ->map(fn ($rows) => [
                 'user' => $rows->first()->user?->name ?? 'Unknown',
-                'liability' => round((float) $rows->sum('computed_amount'), 2),
+                'liability' => round($this->money($rows, 'computed_amount'), 2),
             ])
             ->sortByDesc('liability')
             ->values();
@@ -377,13 +407,12 @@ class ReportBuilder
 
     public function totalLiability(): float
     {
-        return round((float) $this->accruedRewards()
-            ->sum('computed_amount'), 2);
+        return round($this->money($this->accruedRewards()->get(), 'computed_amount'), 2);
     }
 
     public function totalReleasedPayout(): float
     {
-        return round((float) $this->releasedRewards()->sum('computed_amount'), 2);
+        return round($this->money($this->releasedRewards()->get(), 'computed_amount'), 2);
     }
 
     public function hasReleasedData(): bool
