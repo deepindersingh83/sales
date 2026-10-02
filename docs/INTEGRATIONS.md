@@ -10,17 +10,63 @@ connectors, a driver) to go live. What is fully live today is listed first.
   per-workspace bearer token. See README.
 - **BI feed** — `GET /api/v1/payouts` returns released rewards as JSON for
   Power BI / Tableau.
+- **OData v4 feed** — `/api/v1/odata` (entity sets `Payouts`, `Credits`,
+  `Transactions`; `$metadata`, `$filter` with eq/ne/gt/ge/lt/le + `and`,
+  `$orderby`, `$select`, `$top`, `$skip`, `$count`, server paging via
+  `@odata.nextLink`). In Power BI / Excel use **Get Data → OData feed** with
+  **Basic** auth: any user name, the workspace API token as password.
+- **Xero** — see below.
+- **Enterprise reporting** — revenue analytics (10 breakdowns, date range,
+  growth, base-currency conversion), payout (user/plan/type/month), crediting
+  (rep/plan/month/source/any field + uncredited exceptions), attainment
+  (user, quota %, plan, team, distribution), liability, ASC 606 and the
+  analytics dashboard. Every report exports CSV (UTF-8 BOM, opens in Excel).
 - **Multi-currency**, **quota/cap/formula plans**, **splits**, **manager
   overrides**, **manual adjustments**, **double-payment detection**,
   **ASC 606 amortization report**, **simulation**, **typed-name enrollment
   e-signature**.
 
-## Scaffolded (supply credentials / a driver)
+## Xero (live)
 
-### CRM / ERP / accounting connectors
+1. Create a Web app at developer.xero.com. Set its redirect URI to
+   `https://<host>/admin/connectors/xero/callback` (the Xero page shows the
+   exact value to copy).
+2. A Full Admin opens **Integrations → Xero → Manage** and pastes the app's
+   client id and secret (stored encrypted per workspace). Server-wide
+   `XERO_CLIENT_ID` / `XERO_CLIENT_SECRET` in `.env` still work as a fallback.
+   Scopes default to `offline_access accounting.transactions.read
+   accounting.contacts.read`; apps created with Xero's granular scopes can set
+   e.g. `accounting.invoices.read` on the same page.
+3. Click **Connect Xero** and authorise one or more organisations. Each becomes
+   a daily recurring import (the hourly `imports:run-scheduled` scheduler picks
+   it up).
+
+The Xero page then shows each organisation's status (Connected / Needs
+attention / Disconnected), last and next sync, and the last error, with
+**Check connection** (verifies the token and that the organisation is still
+authorised), **Sync now**, a schedule selector (hourly / daily / weekly /
+manual), **Reconnect** and **Disconnect** (revokes access at Xero; imported
+transactions are kept).
+
+What is imported: sales invoices (ACCREC) with status AUTHORISED or PAID.
+`amount` = SubTotal (net of tax), currency and invoice date from Xero, PAID →
+`is_paid` (drives pay-when-paid), later VOIDED → `excluded`. `raw_data` holds
+`customer`, `invoice_number`, `reference`, `product` (first item code),
+`item_codes`, totals, and every line-item tracking category in snake_case —
+e.g. a "Sales Rep" tracking category becomes `sales_rep`, so an alias on
+`sales_rep` credits the right rep. After the first full pull, syncs are
+incremental (`If-Modified-Since`). OAuth tokens are stored encrypted
+(`import_sources.credentials`) and refreshed/rotated automatically; the last
+failure is shown on the Recurring imports page. Credit notes are not imported
+yet.
+
+## Coming soon (scaffolded — supply a driver)
+
+### Other CRM / ERP / accounting connectors
 `App\Services\Connectors\ConnectorRegistry` lists Salesforce, HubSpot, Dynamics,
-Pipedrive, Zoho, NetSuite, QuickBooks, Xero, Stripe, PayPal, Snowflake. To make
-one live: implement `App\Contracts\ImportSourceDriver` (return normalised rows —
+Pipedrive, Zoho, NetSuite, QuickBooks, Stripe, PayPal, Snowflake as "coming
+soon". To make one live (follow the Xero driver in
+`App\Services\Connectors\Xero`): implement `App\Contracts\ImportSourceDriver` (return normalised rows —
 the same shape the CSV path produces), register it, and store the customer's
 credentials (the registry already declares each connector's config fields).
 Nothing downstream (crediting, calc, release) changes.

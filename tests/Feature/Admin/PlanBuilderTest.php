@@ -72,6 +72,15 @@ class PlanBuilderTest extends TestCase
         $this->assertFalse($plan->tiers[0]->is_cumulative);
     }
 
+    public function test_malformed_tiers_are_a_validation_error_not_a_crash(): void
+    {
+        $ws = Workspace::factory()->create();
+        $this->actingAsMember($ws, Role::FullAdmin);
+
+        $this->post(route('admin.plans.store'), ['name' => 'X', 'tiers' => 'abc'])->assertSessionHasErrors('tiers');
+        $this->post(route('admin.plans.store'), ['name' => 'X', 'tiers' => ['abc']])->assertSessionHasErrors();
+    }
+
     public function test_validation_rejects_bad_tier_and_missing_name(): void
     {
         $ws = Workspace::factory()->create();

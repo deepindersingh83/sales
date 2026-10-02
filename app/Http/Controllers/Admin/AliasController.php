@@ -75,13 +75,18 @@ class AliasController extends Controller
         // Constrain the credited user to actual members of this workspace.
         $memberIds = $this->members()->pluck('id')->all();
 
-        return $request->validate([
+        $data = $request->validate([
             'user_id' => ['required', 'integer', Rule::in($memberIds)],
             'alias_value' => ['required', 'string', 'max:255'],
             'match_field' => ['required', 'string', 'max:255'],
             'match_type' => ['required', 'in:exact,contains'],
             'split_percent' => ['nullable', 'numeric', 'min:0', 'max:100'],
         ]);
+
+        // A blank split means "the whole deal" (the column is NOT NULL).
+        $data['split_percent'] ??= 100;
+
+        return $data;
     }
 
     /**

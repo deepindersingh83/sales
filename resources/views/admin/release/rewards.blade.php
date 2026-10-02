@@ -14,7 +14,7 @@
         @include('admin.release._pipeline', ['transitionRoute' => route('admin.calc-runs.rewards.transition', $run)])
 
         @can('release', $run)
-            <div class="bg-white shadow-sm sm:rounded-lg p-6" x-data="{ open: false }">
+            <div class="bg-white shadow-sm sm:rounded-lg p-6" x-data="{ open: {{ $errors->any() ? 'true' : 'false' }} }">
                 <button @click="open = !open" class="text-sm font-medium text-brand-600 hover:text-brand-700">+ Add manual adjustment</button>
                 <form x-show="open" x-cloak method="POST" action="{{ route('admin.calc-runs.adjustments.store', $run) }}" class="mt-3 grid grid-cols-1 sm:grid-cols-4 gap-3 items-end">
                     @csrf
@@ -25,6 +25,7 @@
                                 <option value="{{ $u->id }}">{{ $u->name }}</option>
                             @endforeach
                         </select>
+                        <x-input-error :messages="$errors->get('user_id')" class="mt-2" />
                     </div>
                     <div>
                         <x-input-label for="adj_amount" value="Amount (+/-)" />

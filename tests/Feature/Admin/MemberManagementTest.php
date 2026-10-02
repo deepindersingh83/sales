@@ -3,6 +3,7 @@
 namespace Tests\Feature\Admin;
 
 use App\Enums\Role;
+use App\Models\Alias;
 use App\Models\Plan;
 use App\Models\User;
 use App\Models\Workspace;
@@ -41,6 +42,22 @@ class MemberManagementTest extends TestCase
             ->put(route('admin.members.update', $owner), ['role' => Role::Participant->value])
             ->assertSessionHasErrors('role');
         $this->assertSame(Role::FullAdmin, $owner->roleIn($ws));
+    }
+
+    public function test_removing_a_member_stops_their_crediting_and_overrides(): void
+    {
+        $ws = Workspace::factory()->create();
+        $this->actingAsMember($ws, Role::FullAdmin);
+        $manager = $this->makeMember($ws, Role::Participant);
+        $rep = $this->makeMember($ws, Role::Participant);
+        $ws->users()->updateExistingPivot($rep->id, ['manager_id' => $manager->id]);
+        Alias::create(['workspace_id' => $ws->id, 'user_id' => $manager->id, 'match_field' => 'rep',
+            'alias_value' => 'Maya', 'match_type' => 'exact', 'split_percent' => 100]);
+
+        $this->delete(route('admin.members.destroy', $manager))->assertRedirect(route('admin.members.index'));
+
+        $this->assertSame(0, Alias::where('user_id', $manager->id)->count());
+        $this->assertNull($ws->users()->whereKey($rep->id)->first()->pivot->manager_id);
     }
 
     public function test_non_full_admin_cannot_manage_team(): void

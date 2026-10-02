@@ -20,8 +20,8 @@ class RunScheduledImports extends Command
     {
         $sources = ImportSource::acrossAllWorkspaces()
             ->whereIn('schedule', ['hourly', 'daily', 'weekly'])
-            ->whereNotNull('source_path')
-            ->get();
+            ->get()
+            ->filter(fn (ImportSource $source) => $source->isRunnable());
 
         $ran = 0;
 

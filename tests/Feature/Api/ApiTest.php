@@ -11,6 +11,7 @@ use App\Models\User;
 use App\Models\Workspace;
 use App\Support\WorkspaceContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class ApiTest extends TestCase
@@ -68,5 +69,36 @@ class ApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('meta.total', 1)
             ->assertJsonPath('data.0.amount', 500);
+    }
+
+    public function test_payouts_feed_rejects_nonsense_page_sizes_gracefully(): void
+    {
+        $ws = Workspace::factory()->create();
+        $token = $ws->regenerateApiToken();
+
+        $this->withToken($token)->getJson('/api/v1/payouts?per_page=-1')->assertOk();
+        $this->withToken($token)->getJson('/api/v1/payouts?per_page=0')->assertOk();
+    }
+
+    public function test_api_tokens_are_stored_hashed(): void
+    {
+        $ws = Workspace::factory()->create();
+        $token = $ws->regenerateApiToken();
+
+        $stored = DB::table('workspaces')->where('id', $ws->id)->value('api_token');
+        $this->assertNotSame($token, $stored);
+        $this->assertStringNotContainsString($token, $stored);
+        $this->withToken($token)->getJson('/api/v1/payouts')->assertOk();
+        $this->withToken($stored)->getJson('/api/v1/payouts')->assertUnauthorized(); // the hash itself is useless
+    }
+
+    public function test_existing_plaintext_tokens_keep_working_after_the_hashing_migration(): void
+    {
+        $ws = Workspace::factory()->create();
+        DB::table('workspaces')->where('id', $ws->id)->update(['api_token' => 'wsk_legacy_token_123']);
+
+        (require database_path('migrations/2026_10_02_000100_hash_workspace_api_tokens.php'))->up();
+
+        $this->withToken('wsk_legacy_token_123')->getJson('/api/v1/payouts')->assertOk();
     }
 }

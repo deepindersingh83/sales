@@ -43,6 +43,48 @@ class Transaction extends Model
         return $this->belongsTo(ImportSource::class);
     }
 
+    /** Human reference: the invoice number when the source has one (Xero), else the external id. */
+    public function reference(): string
+    {
+        return (string) (data_get($this->raw_data, 'invoice_number') ?: $this->external_id);
+    }
+
+    public function customer(): ?string
+    {
+        $customer = data_get($this->raw_data, 'customer');
+
+        return filled($customer) ? (string) $customer : null;
+    }
+
+    /**
+     * Share of this transaction still unpaid, 0..1. Sources that report an
+     * amount due (Xero: AmountDue of Total) give partial payments; otherwise
+     * it follows the paid flag.
+     */
+    public function outstandingFraction(): float
+    {
+        $due = data_get($this->raw_data, 'amount_due');
+        $total = data_get($this->raw_data, 'total');
+
+        if (is_numeric($due) && is_numeric($total) && (float) $total > 0) {
+            return max(0.0, min(1.0, (float) $due / (float) $total));
+        }
+
+        return $this->is_paid ? 0.0 : 1.0;
+    }
+
+    /** Paid, Part-paid or Unpaid. */
+    public function paymentStatus(): string
+    {
+        $fraction = $this->outstandingFraction();
+
+        return match (true) {
+            $fraction <= 0.0 => 'Paid',
+            $fraction >= 1.0 => 'Unpaid',
+            default => 'Part-paid',
+        };
+    }
+
     /**
      * Value of this transaction for a given performance metric (revenue/profit).
      */

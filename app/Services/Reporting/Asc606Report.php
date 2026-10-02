@@ -15,6 +15,8 @@ use Illuminate\Support\Collection;
  */
 class Asc606Report
 {
+    public function __construct(protected ReportScope $scope) {}
+
     /**
      * @return array{by_month: Collection<string, float>, total: float, months: int}
      */
@@ -24,7 +26,7 @@ class Asc606Report
         $byMonth = [];
         $total = 0.0;
 
-        Reward::released()
+        $this->scope->rewards(Reward::released())
             ->whereNotNull('computed_amount')
             ->get(['computed_amount', 'created_at'])
             ->each(function (Reward $r) use ($months, &$byMonth, &$total) {

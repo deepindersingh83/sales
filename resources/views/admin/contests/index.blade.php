@@ -8,6 +8,7 @@
             <div class="rounded-lg bg-emerald-50 border border-emerald-200 p-4 text-sm text-emerald-800">{{ session('status') }}</div>
         @endif
 
+        @if (auth()->user()->currentRole()?->canWrite())
         <x-ui.card>
             <h2 class="text-sm font-semibold text-slate-800 mb-4">New contest</h2>
             <form method="POST" action="{{ route('admin.contests.store') }}" class="grid grid-cols-1 sm:grid-cols-5 gap-3 items-end">
@@ -20,6 +21,7 @@
                 <input type="hidden" name="metric" value="credited" />
             </form>
         </x-ui.card>
+        @endif
 
         <x-ui.card padding="p-0">
             @forelse ($contests as $c)
@@ -31,10 +33,12 @@
                             @if ($c->prize) · 🎁 {{ $c->prize }} @endif
                         </div>
                     </div>
+                    @if (auth()->user()->currentRole()?->canWrite())
                     <form method="POST" action="{{ route('admin.contests.destroy', $c) }}" onsubmit="return confirm('Delete?')">
                         @csrf @method('DELETE')
                         <button class="text-rose-600 hover:text-rose-800 text-sm">Delete</button>
                     </form>
+                    @endif
                 </div>
             @empty
                 <p class="px-6 py-8 text-center text-slate-500">No contests yet.</p>

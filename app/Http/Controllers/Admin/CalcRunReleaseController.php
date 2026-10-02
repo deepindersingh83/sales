@@ -56,9 +56,11 @@ class CalcRunReleaseController extends Controller
             ->users()->pluck('users.id')->all();
 
         $data = $request->validate([
-            'user_id' => ['required', 'integer', Rule::in($memberIds)],
+            'user_id' => ['required', 'integer', Rule::in($memberIds), Rule::notIn([$request->user()->id])],
             'amount' => ['required', 'numeric'],
             'reason' => ['required', 'string', 'max:255'],
+        ], [
+            'user_id.not_in' => 'You cannot add an adjustment for yourself.',
         ]);
 
         $calcRun->rewards()->create([
@@ -70,6 +72,9 @@ class CalcRunReleaseController extends Controller
             'meta' => ['reason' => $data['reason'], 'created_by' => $request->user()->id],
             'status' => PayoutStatus::Pending->value,
         ]);
+
+        // The run's numbers changed, so any earlier approval no longer covers them.
+        $calcRun->update(['approved_at' => null, 'approved_by_user_id' => null]);
 
         return redirect()->route('admin.calc-runs.rewards.index', $calcRun)->with('status', 'Adjustment added.');
     }

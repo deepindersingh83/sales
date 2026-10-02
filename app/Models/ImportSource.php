@@ -19,17 +19,35 @@ class ImportSource extends Model
         'schedule',
         'source_path',
         'config',
+        'credentials',
         'last_synced_at',
+        'last_error',
         'next_run_at',
     ];
+
+    /** OAuth tokens must never be rendered or serialised. */
+    protected $hidden = ['credentials'];
 
     protected function casts(): array
     {
         return [
             'config' => 'array',
+            'credentials' => 'encrypted:array',
             'last_synced_at' => 'datetime',
             'next_run_at' => 'datetime',
         ];
+    }
+
+    /** Is this source an API connection (vs. a stored CSV file)? */
+    public function isConnector(): bool
+    {
+        return $this->type === 'xero';
+    }
+
+    /** Can the runner execute this source (a stored file or a live connection)? */
+    public function isRunnable(): bool
+    {
+        return $this->isConnector() ? ! empty($this->credentials) : (bool) $this->source_path;
     }
 
     /** Compute the next run timestamp for this source's cadence, from a base time. */
@@ -48,7 +66,7 @@ class ImportSource extends Model
     /** Is this source due to run at the given moment? */
     public function isDue(?\DateTimeInterface $at = null): bool
     {
-        if (! in_array($this->schedule, ['hourly', 'daily', 'weekly'], true) || ! $this->source_path) {
+        if (! in_array($this->schedule, ['hourly', 'daily', 'weekly'], true) || ! $this->isRunnable()) {
             return false;
         }
 

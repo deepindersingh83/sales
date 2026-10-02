@@ -10,8 +10,10 @@ namespace App\Services\Calculation;
  * Rules (user-confirmed, see DECISIONS.md D7):
  *  - rate tier, cumulative     -> marginal: rate applies only to the portion of
  *                                 attainment within [from, to].
- *  - rate tier, non-cumulative -> if attainment is within [from, to], the rate
- *                                 applies to the ENTIRE attainment; else 0.
+ *  - rate tier, non-cumulative -> the rate of the single band containing the
+ *                                 attainment applies to the ENTIRE attainment.
+ *                                 Where bands touch (one's `to` = next `from`),
+ *                                 reaching the threshold selects the higher band.
  *  - amount tier               -> flat cash bonus paid once attainment reaches
  *                                 `from` (bonuses from multiple tiers stack).
  */
@@ -25,8 +27,9 @@ class TierCalculator
     {
         $total = 0.0;
         $breakdown = [];
+        $nonCumulative = $this->containingNonCumulativeTier($tiers, $attainment);
 
-        foreach ($tiers as $tier) {
+        foreach ($tiers as $index => $tier) {
             $from = (float) $tier['threshold_from'];
             $to = isset($tier['threshold_to']) && $tier['threshold_to'] !== null && $tier['threshold_to'] !== ''
                 ? (float) $tier['threshold_to']
@@ -51,9 +54,7 @@ class TierCalculator
             } else {
                 // Non-cumulative: whole attainment at this tier's rate, but only
                 // if attainment falls within the tier's band.
-                $withinLower = $attainment >= $from;
-                $withinUpper = $to === null || $attainment <= $to;
-                if ($withinLower && $withinUpper) {
+                if ($index === $nonCumulative) {
                     $basis = $attainment;
                     $contribution = $attainment * $rateOrAmount;
                 }
@@ -78,5 +79,33 @@ class TierCalculator
             'total' => round($total, 4),
             'breakdown' => $breakdown,
         ];
+    }
+
+    /**
+     * Index of the one non-cumulative rate tier whose [from, to] band contains
+     * the attainment — the highest `from` wins when bands share a boundary.
+     *
+     * @param  array<int, array<string, mixed>>  $tiers
+     */
+    protected function containingNonCumulativeTier(array $tiers, float $attainment): int|string|null
+    {
+        $chosen = null;
+        $chosenFrom = -INF;
+
+        foreach ($tiers as $index => $tier) {
+            if (($tier['kind'] ?? 'rate') === 'amount' || (bool) ($tier['is_cumulative'] ?? true)) {
+                continue;
+            }
+
+            $from = (float) $tier['threshold_from'];
+            $to = isset($tier['threshold_to']) && $tier['threshold_to'] !== '' ? (float) $tier['threshold_to'] : null;
+
+            if ($attainment >= $from && ($to === null || $attainment <= $to) && $from > $chosenFrom) {
+                $chosen = $index;
+                $chosenFrom = $from;
+            }
+        }
+
+        return $chosen;
     }
 }

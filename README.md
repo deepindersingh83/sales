@@ -53,6 +53,10 @@ is tenant-scoped by the token.
 - `POST /api/v1/transactions` — idempotent ingest / webhook target
   (`{ "source_system": "...", "transactions": [ { "external_id", "amount", ... } ] }`).
 - `GET /api/v1/payouts` — released-rewards feed for BI tools (Power BI / Tableau).
+- `GET /api/v1/odata` — OData v4 feed (Payouts, Credits, Transactions) for Power BI /
+  Excel / Tableau; BI tools use Basic auth with the token as password.
+
+Connectors: CSV, REST API and **Xero** are live — see `docs/INTEGRATIONS.md`.
 
 ```bash
 curl -X POST https://<host>/api/v1/transactions \

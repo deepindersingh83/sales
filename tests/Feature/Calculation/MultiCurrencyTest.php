@@ -2,9 +2,11 @@
 
 namespace Tests\Feature\Calculation;
 
+use App\Actions\SimulateCalc;
 use App\Actions\StartCalcRun;
 use App\Enums\RewardType;
 use App\Models\Alias;
+use App\Models\CalcLog;
 use App\Models\Credit;
 use App\Models\FxRate;
 use App\Models\Plan;
@@ -60,5 +62,31 @@ class MultiCurrencyTest extends TestCase
 
         // Commission 10% of 1200 USD = 120.
         $this->assertEqualsWithDelta(120.0, (float) Reward::where('calc_run_id', $run->id)->where('reward_type', RewardType::Commission->value)->value('computed_amount'), 0.01);
+    }
+
+    public function test_transaction_without_an_fx_rate_is_not_credited(): void
+    {
+        $ws = Workspace::factory()->create();
+        app(WorkspaceContext::class)->set($ws);
+        $rep = User::factory()->create(['name' => 'Alice']);
+        $ws->users()->attach($rep->id, ['role' => 'participant']);
+
+        $plan = Plan::factory()->for($ws)->active()->create(['performance_metric' => 'revenue', 'currency' => 'USD', 'start_date' => null, 'end_date' => null]);
+        $plan->tiers()->create(['threshold_from' => 0, 'threshold_to' => null, 'kind' => 'rate', 'rate_or_amount' => 0.1, 'is_cumulative' => true, 'sort_order' => 0]);
+        Alias::create(['workspace_id' => $ws->id, 'user_id' => $rep->id, 'alias_value' => 'Alice', 'match_field' => 'rep', 'match_type' => 'exact']);
+
+        // No JPY rate exists, so this deal must not be credited 1:1 as USD.
+        Transaction::create(['workspace_id' => $ws->id, 'external_id' => 'J1', 'source_system' => 'csv', 'amount' => 1000000, 'currency' => 'JPY', 'transaction_date' => '2026-03-01', 'raw_data' => ['rep' => 'Alice']]);
+        Transaction::create(['workspace_id' => $ws->id, 'external_id' => 'U1', 'source_system' => 'csv', 'amount' => 1000, 'currency' => 'USD', 'transaction_date' => '2026-03-01', 'raw_data' => ['rep' => 'Alice']]);
+
+        $summary = app(SimulateCalc::class)->handle($plan)['summary'];
+        $this->assertSame(1, $summary['credited']);
+        $this->assertSame(1, $summary['uncredited']);
+
+        $run = app(StartCalcRun::class)->handle($plan);
+
+        $this->assertEqualsWithDelta(1000.0, (float) Credit::where('calc_run_id', $run->id)->sum('credited_amount'), 0.01);
+        $this->assertSame(1, CalcLog::where('calc_run_id', $run->id)->where('step', 'fx_missing')->count());
+        $this->assertEqualsWithDelta(100.0, (float) Reward::where('calc_run_id', $run->id)->where('reward_type', RewardType::Commission->value)->value('computed_amount'), 0.01);
     }
 }

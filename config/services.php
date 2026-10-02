@@ -42,6 +42,16 @@ return [
         'model' => env('AI_MODEL', 'claude-sonnet-5'),
     ],
 
+    // Xero (accounting) — the first live CRM/ERP connector. Create an app at
+    // developer.xero.com; its redirect URI must match XERO_REDIRECT_URI (defaults
+    // to the admin callback route). Invoices are imported as transactions.
+    'xero' => [
+        'client_id' => env('XERO_CLIENT_ID'),
+        'client_secret' => env('XERO_CLIENT_SECRET'),
+        'redirect' => env('XERO_REDIRECT_URI'),
+        'scopes' => env('XERO_SCOPES', 'offline_access accounting.transactions.read accounting.contacts.read'),
+    ],
+
     // Single-sign-on. Unset by default; enabling requires an OAuth/SAML provider
     // (e.g. Laravel Socialite) plus the provider's client credentials.
     'sso' => [

@@ -61,6 +61,22 @@ class TierCalculatorTest extends TestCase
         $this->assertEqualsWithDelta(250.0, $this->calc->commission($tiers, 5000)['total'], 0.001);
     }
 
+    public function test_non_cumulative_boundary_pays_only_the_higher_tier(): void
+    {
+        $tiers = [
+            $this->rateTier(0, 10000, 0.05, false),
+            $this->rateTier(10000, 20000, 0.08, false),
+        ];
+
+        // Exactly on the shared boundary: 10k * 8% = 800, not 500 + 800.
+        $result = $this->calc->commission($tiers, 10000);
+        $this->assertEqualsWithDelta(800.0, $result['total'], 0.001);
+        $this->assertCount(1, $result['breakdown']);
+
+        // The closed upper end of the top band still pays.
+        $this->assertEqualsWithDelta(1600.0, $this->calc->commission($tiers, 20000)['total'], 0.001);
+    }
+
     public function test_amount_tier_pays_flat_bonus_when_reached_and_stacks(): void
     {
         $tiers = [

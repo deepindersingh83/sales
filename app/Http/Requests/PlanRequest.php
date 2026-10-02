@@ -61,9 +61,16 @@ class PlanRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
-        // Normalise checkbox-style booleans on tier rows.
+        // Normalise checkbox-style booleans on tier rows. Malformed input
+        // (tiers not a list of rows) is left for the rules to reject.
         $tiers = $this->input('tiers', []);
+        if (! is_array($tiers)) {
+            return;
+        }
         foreach ($tiers as $i => $tier) {
+            if (! is_array($tier)) {
+                continue;
+            }
             $tiers[$i]['is_cumulative'] = filter_var(
                 $tier['is_cumulative'] ?? false,
                 FILTER_VALIDATE_BOOLEAN

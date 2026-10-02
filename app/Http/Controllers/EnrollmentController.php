@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Enums\PlanStatus;
 use App\Models\Enrollment;
 use App\Models\Plan;
+use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -18,9 +19,12 @@ class EnrollmentController extends Controller
 {
     public function index(Request $request): View
     {
+        $user = $request->user();
         $plans = Plan::where('status', PlanStatus::Active)
             ->with(['terms' => fn ($q) => $q->orderByDesc('version')])
-            ->get();
+            ->get()
+            ->filter(fn (Plan $plan) => $this->mayEnroll($user, $plan))
+            ->values();
 
         $mine = Enrollment::where('user_id', $request->user()->id)
             ->get()
@@ -31,7 +35,7 @@ class EnrollmentController extends Controller
 
     public function sign(Request $request, Plan $plan): RedirectResponse
     {
-        abort_unless($plan->status === PlanStatus::Active, 404);
+        abort_unless($plan->status === PlanStatus::Active && $this->mayEnroll($request->user(), $plan), 404);
 
         $data = $request->validate([
             'signature' => ['required', 'string', 'max:255'],
@@ -47,5 +51,14 @@ class EnrollmentController extends Controller
         );
 
         return redirect()->route('enrollments.index')->with('status', "Enrolled in {$plan->name}.");
+    }
+
+    /**
+     * Participants self-enroll in any active plan; admins only see plans they
+     * may view (so hidden plans and their terms stay hidden).
+     */
+    protected function mayEnroll(User $user, Plan $plan): bool
+    {
+        return ! $user->currentRole()?->isAdmin() || $user->canViewPlan($plan);
     }
 }
