@@ -37,6 +37,33 @@ class FormulaEvaluatorTest extends TestCase
         $this->assertEqualsWithDelta(8000.0, $this->calc->evaluate('min(revenue, quota)', $vars), 0.01);
     }
 
+    public function test_nested_functions_and_unary_minus_still_work(): void
+    {
+        $vars = ['revenue' => 10000, 'quota' => 8000];
+
+        $this->assertEqualsWithDelta(500.0, $this->calc->evaluate('max(min(revenue, quota) - 7500, -(1))', $vars), 0.01);
+        $this->assertEqualsWithDelta(1.5, $this->calc->evaluate('.5 + 1.', $vars), 0.0001);
+    }
+
+    public function test_malformed_formulas_are_rejected_not_silently_evaluated(): void
+    {
+        $vars = ['attainment' => 100, 'revenue' => 50];
+
+        foreach ([
+            'min(attainment)',          // one argument: used to evaluate to 0
+            '1 + min(attainment)',      // used to evaluate as min(1, attainment)
+            'max(1, 2, 3)',
+            'min()',
+            'max 1',
+            '-',
+            '1.5.5',
+            '.',
+            '1, 2',
+        ] as $formula) {
+            $this->assertFalse($this->calc->isValid($formula, $vars), "Accepted: {$formula}");
+        }
+    }
+
     public function test_division_by_zero_is_safe(): void
     {
         $this->assertEqualsWithDelta(0.0, $this->calc->evaluate('10 / 0'), 0.0001);
