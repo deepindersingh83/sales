@@ -56,9 +56,11 @@ class CalcRunReleaseController extends Controller
             ->users()->pluck('users.id')->all();
 
         $data = $request->validate([
-            'user_id' => ['required', 'integer', Rule::in($memberIds)],
+            'user_id' => ['required', 'integer', Rule::in($memberIds), Rule::notIn([$request->user()->id])],
             'amount' => ['required', 'numeric'],
             'reason' => ['required', 'string', 'max:255'],
+        ], [
+            'user_id.not_in' => 'You cannot add an adjustment for yourself.',
         ]);
 
         $calcRun->rewards()->create([

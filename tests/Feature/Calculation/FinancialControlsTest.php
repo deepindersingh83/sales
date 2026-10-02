@@ -62,6 +62,21 @@ class FinancialControlsTest extends TestCase
         $this->assertSame('Overpaid last cycle', $adj->meta['reason']);
     }
 
+    public function test_admin_cannot_add_an_adjustment_for_themselves(): void
+    {
+        $ws = Workspace::factory()->create();
+        app(WorkspaceContext::class)->set($ws);
+        $plan = Plan::factory()->for($ws)->create();
+        $run = CalcRun::create(['workspace_id' => $ws->id, 'plan_id' => $plan->id, 'status' => 'completed']);
+
+        $admin = $this->actingAsMember($ws, Role::FullAdmin);
+        $this->post(route('admin.calc-runs.adjustments.store', $run), [
+            'user_id' => $admin->id, 'amount' => 5000, 'reason' => 'Bonus',
+        ])->assertSessionHasErrors('user_id');
+
+        $this->assertSame(0, Reward::where('calc_run_id', $run->id)->count());
+    }
+
     public function test_double_payment_detection_flags_matching_amount_and_date(): void
     {
         $ws = Workspace::factory()->create();
