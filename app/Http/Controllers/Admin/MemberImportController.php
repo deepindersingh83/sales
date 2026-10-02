@@ -95,11 +95,22 @@ class MemberImportController extends Controller
                     continue;
                 }
 
-                $user = $existing ?? User::create([
-                    'name' => $name ?: Str::before($email, '@'),
-                    'email' => $email,
-                    'password' => Hash::make(Str::password(16)),
-                ]);
+                if ($existing && ! $existing->hasVerifiedEmail()) {
+                    $errors[] = "Line {$line}: {$email} belongs to an account whose email is not verified yet — not added.";
+                    $skipped++;
+
+                    continue;
+                }
+
+                $user = $existing;
+                if (! $user) {
+                    $user = User::create([
+                        'name' => $name ?: Str::before($email, '@'),
+                        'email' => $email,
+                        'password' => Hash::make(Str::password(16)),
+                    ]);
+                    $user->sendEmailVerificationNotification();
+                }
                 $workspace->users()->attach($user->id, [
                     'role' => $roleValue ?? Role::Participant->value,
                     'salary' => $salary,

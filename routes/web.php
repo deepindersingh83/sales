@@ -39,10 +39,15 @@ Route::get('/dashboard', [DashboardController::class, 'index'])
     ->middleware(['auth', 'verified'])
     ->name('dashboard');
 
+// Profile stays reachable before verification, so a mistyped email can be fixed.
 Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+});
+
+// Everything else requires a verified email address.
+Route::middleware(['auth', 'verified'])->group(function () {
 
     // Disputes — participants raise and follow their own; admins triage via the
     // admin queue. Per-record access is enforced by DisputePolicy.
@@ -77,7 +82,7 @@ Route::middleware('auth')->group(function () {
 
 // Admin area — any workspace role except Participant. Per-record authorization
 // is enforced by policies inside each controller action.
-Route::middleware(['auth', 'workspace.admin'])
+Route::middleware(['auth', 'verified', 'workspace.admin'])
     ->prefix('admin')
     ->name('admin.')
     ->group(function () {

@@ -67,10 +67,19 @@ class MemberController extends Controller
                 'email' => $data['email'],
                 'password' => Hash::make($tempPassword),
             ]);
+            $user->sendEmailVerificationNotification();
         }
 
         if ($user->belongsToWorkspace($workspace)) {
             return back()->withErrors(['email' => 'That person is already a member.']);
+        }
+
+        // Anyone can sign up with someone else's address; only an account whose
+        // owner has proved they control the inbox may be granted access.
+        if (! $tempPassword && ! $user->hasVerifiedEmail()) {
+            return back()->withErrors([
+                'email' => 'An account with this email exists but its email address has not been verified. Ask them to verify it (or reset their password), then add them again.',
+            ]);
         }
 
         $workspace->users()->attach($user->id, ['role' => $data['role']]);
