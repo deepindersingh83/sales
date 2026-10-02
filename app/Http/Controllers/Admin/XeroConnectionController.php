@@ -69,9 +69,7 @@ class XeroConnectionController extends Controller
         $tokens['grant_id'] = (string) Str::uuid();
 
         foreach ($tenants as $tenant) {
-            $source = ImportSource::where('type', 'xero')->get()
-                ->first(fn (ImportSource $s) => ($s->config['tenant_id'] ?? null) === $tenant['tenantId'])
-                ?? new ImportSource(['type' => 'xero', 'schedule' => 'daily', 'next_run_at' => now()]);
+            $source = $this->sourceForTenant($tenant['tenantId']);
 
             $source->fill([
                 'name' => 'Xero — '.$tenant['tenantName'],
@@ -88,6 +86,18 @@ class XeroConnectionController extends Controller
 
         return redirect()->route('admin.import-sources.index')
             ->with('status', "Connected to Xero ({$names}). Invoices sync daily — use “Run now” for the first import.");
+    }
+
+    /**
+     * The workspace's import source for a Xero organisation: the existing one
+     * when reconnecting (so its sync cursor and history are kept), otherwise a
+     * new daily source.
+     */
+    protected function sourceForTenant(string $tenantId): ImportSource
+    {
+        return ImportSource::where('type', 'xero')->get()
+            ->first(fn (ImportSource $s) => ($s->config['tenant_id'] ?? null) === $tenantId)
+            ?? new ImportSource(['type' => 'xero', 'schedule' => 'daily', 'next_run_at' => now()]);
     }
 
     protected function fail(string $message): RedirectResponse

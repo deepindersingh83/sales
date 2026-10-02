@@ -44,20 +44,20 @@ class EnterpriseReportingTest extends TestCase
         $plan = Plan::factory()->for($ws)->create(['name' => 'Enterprise AE', 'quota' => 2000]);
         $run = CalcRun::create(['workspace_id' => $ws->id, 'plan_id' => $plan->id, 'status' => 'completed']);
 
-        $tx = fn (string $id, float $amount, string $date, array $extra = []) => Transaction::create(array_merge([
-            'workspace_id' => $ws->id, 'external_id' => $id, 'source_system' => 'xero', 'amount' => $amount,
-            'currency' => 'USD', 'transaction_date' => $date, 'is_paid' => false, 'raw_data' => ['customer' => 'Acme', 'product' => 'PRO'],
+        $tx = fn (string $id, float $amount, string $date, array $extra = []) => Transaction::factory()->for($ws)->create(array_merge([
+            'external_id' => $id, 'source_system' => 'xero', 'amount' => $amount, 'profit_amount' => null,
+            'transaction_date' => $date, 'is_paid' => false, 'raw_data' => ['customer' => 'Acme', 'product' => 'PRO'],
         ], $extra));
 
-        $a = $tx('A', 1000, '2026-07-10', ['profit_amount' => 400, 'is_paid' => true]);
-        $b = $tx('B', 500, '2026-08-05', ['profit_amount' => 100]);
+        $paidJulyDeal = $tx('A', 1000, '2026-07-10', ['profit_amount' => 400, 'is_paid' => true]);
+        $unpaidAugustDeal = $tx('B', 500, '2026-08-05', ['profit_amount' => 100]);
         $tx('C', 200, '2026-08-20', ['raw_data' => ['customer' => 'Globex', 'product' => 'LITE']]); // uncredited
         $tx('D', 9999, '2026-08-21', ['excluded' => true]);
         $tx('E', 100, '2026-08-22', ['currency' => 'EUR', 'raw_data' => ['customer' => 'Initech']]);
         FxRate::create(['workspace_id' => $ws->id, 'base_currency' => 'EUR', 'quote_currency' => 'USD', 'rate' => 1.5, 'effective_date' => '2026-01-01']);
 
-        foreach ([[$a, 1000], [$b, 500]] as [$t, $amount]) {
-            Credit::create(['workspace_id' => $ws->id, 'calc_run_id' => $run->id, 'transaction_id' => $t->id, 'user_id' => $alice->id, 'credited_amount' => $amount, 'currency' => 'USD', 'status' => PayoutStatus::Released]);
+        foreach ([[$paidJulyDeal, 1000], [$unpaidAugustDeal, 500]] as [$creditedDeal, $amount]) {
+            Credit::create(['workspace_id' => $ws->id, 'calc_run_id' => $run->id, 'transaction_id' => $creditedDeal->id, 'user_id' => $alice->id, 'credited_amount' => $amount, 'currency' => 'USD', 'status' => PayoutStatus::Released]);
         }
         Reward::create(['workspace_id' => $ws->id, 'calc_run_id' => $run->id, 'user_id' => $alice->id, 'plan_id' => $plan->id, 'reward_type' => 'commission', 'computed_amount' => 150, 'currency' => 'USD', 'status' => PayoutStatus::Released]);
 

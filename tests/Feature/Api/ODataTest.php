@@ -26,8 +26,8 @@ class ODataTest extends TestCase
 
     private function transaction(Workspace $ws, string $id, float $amount, string $date): Transaction
     {
-        return Transaction::create([
-            'workspace_id' => $ws->id, 'external_id' => $id, 'source_system' => 'xero', 'amount' => $amount,
+        return Transaction::factory()->for($ws)->create([
+            'external_id' => $id, 'source_system' => 'xero', 'amount' => $amount,
             'currency' => 'AUD', 'transaction_date' => $date, 'raw_data' => ['customer' => "Customer {$id}"],
         ]);
     }
