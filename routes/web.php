@@ -20,6 +20,7 @@ use App\Http\Controllers\Admin\TransactionController;
 use App\Http\Controllers\Admin\TransactionImportController;
 use App\Http\Controllers\Admin\WorkspaceSettingsController;
 use App\Http\Controllers\Admin\XeroConnectionController;
+use App\Http\Controllers\Admin\XeroSettingsController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DisputeController;
 use App\Http\Controllers\EnrollmentController;
@@ -193,6 +194,14 @@ Route::middleware(['auth', 'verified', 'workspace.admin'])
         Route::get('connectors', [ConnectorController::class, 'index'])->name('connectors.index');
         Route::get('connectors/xero/connect', [XeroConnectionController::class, 'connect'])->name('connectors.xero.connect');
         Route::get('connectors/xero/callback', [XeroConnectionController::class, 'callback'])->name('connectors.xero.callback');
+
+        // Xero settings: app keys, and each organisation's health/schedule/disconnect.
+        Route::get('connectors/xero', [XeroSettingsController::class, 'show'])->name('connectors.xero.show');
+        Route::put('connectors/xero/app', [XeroSettingsController::class, 'updateApp'])->name('connectors.xero.app.update');
+        Route::delete('connectors/xero/app', [XeroSettingsController::class, 'destroyApp'])->name('connectors.xero.app.destroy');
+        Route::post('connectors/xero/{source}/check', [XeroSettingsController::class, 'check'])->whereNumber('source')->name('connectors.xero.check');
+        Route::put('connectors/xero/{source}', [XeroSettingsController::class, 'update'])->whereNumber('source')->name('connectors.xero.update');
+        Route::delete('connectors/xero/{source}', [XeroSettingsController::class, 'destroy'])->whereNumber('source')->name('connectors.xero.destroy');
     });
 
 require __DIR__.'/auth.php';

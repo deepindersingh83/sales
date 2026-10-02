@@ -4,6 +4,7 @@ namespace App\Services\Connectors\Xero;
 
 use App\Contracts\ImportSourceDriver;
 use App\Models\ImportSource;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
@@ -60,6 +61,48 @@ class XeroDriver implements ImportSourceDriver
         } while (count($invoices) >= XeroClient::PAGE_SIZE);
 
         return $rows;
+    }
+
+    /**
+     * Check the connection end to end: a usable token (refreshing it if
+     * needed) and this organisation still authorised for the app.
+     *
+     * @return array{ok:bool, message:string}
+     */
+    public function check(ImportSource $source): array
+    {
+        try {
+            $token = $this->freshAccessToken($source);
+            $tenant = collect($this->client->connections($token))
+                ->firstWhere('tenantId', $source->credentials['tenant_id'] ?? null);
+        } catch (RequestException $e) {
+            return ['ok' => false, 'message' => "Xero rejected the connection (HTTP {$e->response->status()}). Reconnect Xero."];
+        } catch (\Throwable $e) {
+            return ['ok' => false, 'message' => $e->getMessage()];
+        }
+
+        return $tenant
+            ? ['ok' => true, 'message' => "Connected to {$tenant['tenantName']}."]
+            : ['ok' => false, 'message' => 'This organisation is no longer authorised for the app. Reconnect Xero.'];
+    }
+
+    /**
+     * Revoke this organisation's access at Xero. Best effort: a connection that
+     * is already dead must still be removable locally, so failures are
+     * reported, not thrown.
+     */
+    public function revoke(ImportSource $source): void
+    {
+        $connectionId = $source->config['connection_id'] ?? null;
+        if ($connectionId === null) {
+            return;
+        }
+
+        try {
+            $this->client->revoke($this->freshAccessToken($source), $connectionId);
+        } catch (\Throwable $e) {
+            report($e);
+        }
     }
 
     /**

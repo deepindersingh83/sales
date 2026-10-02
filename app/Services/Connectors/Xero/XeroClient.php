@@ -2,6 +2,7 @@
 
 namespace App\Services\Connectors\Xero;
 
+use App\Models\IntegrationSetting;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Carbon;
@@ -26,10 +27,31 @@ class XeroClient
     /** Xero returns at most this many invoices per page. */
     public const PAGE_SIZE = 100;
 
-    /** Has the platform operator supplied Xero app credentials? */
+    /** Have Xero app credentials been supplied (on the Integrations page or in .env)? */
     public function isConfigured(): bool
     {
-        return filled(config('services.xero.client_id')) && filled(config('services.xero.client_secret'));
+        $app = $this->app();
+
+        return filled($app['client_id']) && filled($app['client_secret']);
+    }
+
+    /**
+     * The Xero app credentials in use: the workspace's own keys saved on the
+     * Integrations page win over the server-wide .env values.
+     *
+     * @return array{client_id:?string, client_secret:?string, scopes:string, source:string}
+     */
+    public function app(): array
+    {
+        $saved = IntegrationSetting::for('xero');
+        $useSaved = filled($saved['client_id'] ?? null) && filled($saved['client_secret'] ?? null);
+
+        return [
+            'client_id' => $useSaved ? $saved['client_id'] : config('services.xero.client_id'),
+            'client_secret' => $useSaved ? $saved['client_secret'] : config('services.xero.client_secret'),
+            'scopes' => ($useSaved ? ($saved['scopes'] ?? null) : null) ?: config('services.xero.scopes'),
+            'source' => $useSaved ? 'workspace' : 'server',
+        ];
     }
 
     public function redirectUri(): string
@@ -37,14 +59,20 @@ class XeroClient
         return config('services.xero.redirect') ?: route('admin.connectors.xero.callback');
     }
 
+    /** Revoke one organisation connection at Xero (the app loses access to it). */
+    public function revoke(string $accessToken, string $connectionId): void
+    {
+        Http::withToken($accessToken)->delete(self::CONNECTIONS_URL.'/'.$connectionId)->throw();
+    }
+
     /** URL that sends the admin to Xero's consent screen. */
     public function authorizeUrl(string $state): string
     {
         return self::AUTHORIZE_URL.'?'.http_build_query([
             'response_type' => 'code',
-            'client_id' => config('services.xero.client_id'),
+            'client_id' => $this->app()['client_id'],
             'redirect_uri' => $this->redirectUri(),
-            'scope' => config('services.xero.scopes'),
+            'scope' => $this->app()['scopes'],
             'state' => $state,
         ]);
     }
@@ -80,7 +108,7 @@ class XeroClient
     /**
      * Organisations (tenants) the token was granted access to.
      *
-     * @return array<int, array{tenantId:string, tenantName:string, tenantType:string}>
+     * @return array<int, array{id:string, tenantId:string, tenantName:string, tenantType:string}>
      */
     public function connections(string $accessToken): array
     {
@@ -133,8 +161,10 @@ class XeroClient
      */
     protected function requestTokens(array $form): array
     {
+        $app = $this->app();
+
         $json = Http::asForm()
-            ->withBasicAuth(config('services.xero.client_id'), config('services.xero.client_secret'))
+            ->withBasicAuth((string) $app['client_id'], (string) $app['client_secret'])
             ->post(self::TOKEN_URL, $form)
             ->throw()
             ->json();

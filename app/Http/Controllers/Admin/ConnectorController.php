@@ -12,10 +12,15 @@ class ConnectorController extends Controller
 {
     public function index(ConnectorRegistry $registry, XeroClient $xero): View
     {
+        $xeroSources = ImportSource::where('type', 'xero')->get();
+
         return view('admin.connectors.index', [
             'connectors' => collect($registry->all())->groupBy('category'),
             'xeroConfigured' => $xero->isConfigured(),
-            'xeroSources' => ImportSource::where('type', 'xero')->get(),
+            'xeroSources' => $xeroSources,
+            'xeroNeedsAttention' => $xeroSources->contains(fn (ImportSource $source) => $source->last_error
+                || ($source->config['last_check_ok'] ?? true) === false
+                || ! $source->isRunnable()),
         ]);
     }
 }

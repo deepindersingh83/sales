@@ -90,7 +90,7 @@ class XeroConnectorTest extends TestCase
         $this->actingAsMember($ws, Role::FullAdmin);
 
         $this->get(route('admin.connectors.xero.connect'))
-            ->assertRedirect(route('admin.connectors.index'))
+            ->assertRedirect(route('admin.connectors.xero.show'))
             ->assertSessionHasErrors('xero');
     }
 
@@ -109,7 +109,7 @@ class XeroConnectorTest extends TestCase
 
         $this->get(route('admin.connectors.index'))
             ->assertOk()
-            ->assertSee('Connect Xero')
+            ->assertSee(route('admin.connectors.xero.show'))
             ->assertSee('Coming soon');
 
         $source = $this->connectedSource($ws);
@@ -130,7 +130,7 @@ class XeroConnectorTest extends TestCase
 
         $this->withSession(['xero_oauth_state' => 'expected'])
             ->get(route('admin.connectors.xero.callback', ['state' => 'forged', 'code' => 'abc']))
-            ->assertRedirect(route('admin.connectors.index'))
+            ->assertRedirect(route('admin.connectors.xero.show'))
             ->assertSessionHasErrors('xero');
 
         $this->assertSame(0, ImportSource::count());
@@ -143,7 +143,7 @@ class XeroConnectorTest extends TestCase
 
         $this->withSession(['xero_oauth_state' => 'good'])
             ->get(route('admin.connectors.xero.callback', ['state' => 'good', 'error' => 'access_denied']))
-            ->assertRedirect(route('admin.connectors.index'))
+            ->assertRedirect(route('admin.connectors.xero.show'))
             ->assertSessionHasErrors(['xero' => 'Xero connection was cancelled.']);
 
         $this->assertSame(0, ImportSource::count());
@@ -157,7 +157,7 @@ class XeroConnectorTest extends TestCase
 
         $this->withSession(['xero_oauth_state' => 'good'])
             ->get(route('admin.connectors.xero.callback', ['state' => 'good', 'code' => 'abc']))
-            ->assertRedirect(route('admin.connectors.index'))
+            ->assertRedirect(route('admin.connectors.xero.show'))
             ->assertSessionHasErrors('xero');
 
         $this->assertSame(0, ImportSource::count());
@@ -191,7 +191,7 @@ class XeroConnectorTest extends TestCase
 
         $this->withSession(['xero_oauth_state' => 'good'])
             ->get(route('admin.connectors.xero.callback', ['state' => 'good', 'code' => 'abc']))
-            ->assertRedirect(route('admin.import-sources.index'));
+            ->assertRedirect(route('admin.connectors.xero.show'));
 
         $source = ImportSource::sole();
         $this->assertSame('xero', $source->type);

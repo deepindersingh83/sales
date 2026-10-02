@@ -28,8 +28,8 @@ class XeroConnectionController extends Controller
         Gate::authorize('import', Transaction::class);
 
         if (! $this->client->isConfigured()) {
-            return redirect()->route('admin.connectors.index')
-                ->withErrors(['xero' => 'Xero is not configured on this server (set XERO_CLIENT_ID and XERO_CLIENT_SECRET).']);
+            return redirect()->route('admin.connectors.xero.show')
+                ->withErrors(['xero' => 'Add your Xero app keys first.']);
         }
 
         $state = Str::random(40);
@@ -76,6 +76,7 @@ class XeroConnectionController extends Controller
                 'config' => array_merge($source->config ?? [], [
                     'tenant_id' => $tenant['tenantId'],
                     'tenant_name' => $tenant['tenantName'],
+                    'connection_id' => $tenant['id'] ?? null,
                 ]),
                 'credentials' => array_merge($tokens, ['tenant_id' => $tenant['tenantId']]),
                 'last_error' => null,
@@ -84,8 +85,8 @@ class XeroConnectionController extends Controller
 
         $names = collect($tenants)->pluck('tenantName')->implode(', ');
 
-        return redirect()->route('admin.import-sources.index')
-            ->with('status', "Connected to Xero ({$names}). Invoices sync daily — use “Run now” for the first import.");
+        return redirect()->route('admin.connectors.xero.show')
+            ->with('status', "Connected to Xero ({$names}). Invoices sync daily — use “Sync now” for the first import.");
     }
 
     /**
@@ -102,6 +103,6 @@ class XeroConnectionController extends Controller
 
     protected function fail(string $message): RedirectResponse
     {
-        return redirect()->route('admin.connectors.index')->withErrors(['xero' => $message]);
+        return redirect()->route('admin.connectors.xero.show')->withErrors(['xero' => $message]);
     }
 }

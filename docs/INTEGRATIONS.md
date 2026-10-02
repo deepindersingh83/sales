@@ -29,15 +29,24 @@ connectors, a driver) to go live. What is fully live today is listed first.
 ## Xero (live)
 
 1. Create a Web app at developer.xero.com. Set its redirect URI to
-   `https://<host>/admin/connectors/xero/callback`.
-2. Set `XERO_CLIENT_ID`, `XERO_CLIENT_SECRET` (and `XERO_REDIRECT_URI` if the
-   default above differs) in `.env`. `XERO_SCOPES` defaults to
-   `offline_access accounting.transactions.read accounting.contacts.read`;
-   Xero apps created with granular scopes need the equivalent invoice read
-   scope instead.
-3. An admin opens **Integrations → Connect Xero** and authorises one or more
-   organisations. Each becomes a daily recurring import source (the hourly
-   `imports:run-scheduled` scheduler picks it up; **Run now** syncs at once).
+   `https://<host>/admin/connectors/xero/callback` (the Xero page shows the
+   exact value to copy).
+2. A Full Admin opens **Integrations → Xero → Manage** and pastes the app's
+   client id and secret (stored encrypted per workspace). Server-wide
+   `XERO_CLIENT_ID` / `XERO_CLIENT_SECRET` in `.env` still work as a fallback.
+   Scopes default to `offline_access accounting.transactions.read
+   accounting.contacts.read`; apps created with Xero's granular scopes can set
+   e.g. `accounting.invoices.read` on the same page.
+3. Click **Connect Xero** and authorise one or more organisations. Each becomes
+   a daily recurring import (the hourly `imports:run-scheduled` scheduler picks
+   it up).
+
+The Xero page then shows each organisation's status (Connected / Needs
+attention / Disconnected), last and next sync, and the last error, with
+**Check connection** (verifies the token and that the organisation is still
+authorised), **Sync now**, a schedule selector (hourly / daily / weekly /
+manual), **Reconnect** and **Disconnect** (revokes access at Xero; imported
+transactions are kept).
 
 What is imported: sales invoices (ACCREC) with status AUTHORISED or PAID.
 `amount` = SubTotal (net of tax), currency and invoice date from Xero, PAID →
