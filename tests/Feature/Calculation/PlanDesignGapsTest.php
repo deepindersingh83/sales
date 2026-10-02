@@ -94,4 +94,37 @@ class PlanDesignGapsTest extends TestCase
         $run2 = app(StartCalcRun::class)->handle($plan, null, false, 'true_up');
         $this->assertEqualsWithDelta(500.0, $this->commission($run2->id), 0.01);
     }
+
+    public function test_true_up_nets_reward_rules_and_overrides_against_released_amounts(): void
+    {
+        $ws = Workspace::factory()->create();
+        [$plan, $rep] = $this->baseSetup($ws, ['manager_override_percent' => 5]);
+        $manager = User::factory()->create();
+        $ws->users()->attach($manager->id, ['role' => 'participant']);
+        $ws->users()->updateExistingPivot($rep->id, ['manager_id' => $manager->id]);
+        $plan->rewardRules()->create(['reward_type' => RewardType::CashFixed->value, 'value' => 100]);
+        $plan->rewardRules()->create(['reward_type' => RewardType::CashPctRevenue->value, 'value' => 0.01]);
+        $plan->rewardRules()->create(['reward_type' => RewardType::Badge->value]);
+        Transaction::create(['workspace_id' => $ws->id, 'external_id' => 'T1', 'source_system' => 'csv', 'amount' => 10000, 'currency' => 'USD', 'raw_data' => ['rep' => 'Alice']]);
+
+        $run1 = app(StartCalcRun::class)->handle($plan);
+        Reward::where('calc_run_id', $run1->id)->update(['status' => PayoutStatus::Released]);
+
+        Transaction::create(['workspace_id' => $ws->id, 'external_id' => 'T2', 'source_system' => 'csv', 'amount' => 5000, 'currency' => 'USD', 'raw_data' => ['rep' => 'Alice']]);
+        $run2 = app(StartCalcRun::class)->handle($plan, null, false, 'true_up');
+
+        $amounts = Reward::where('calc_run_id', $run2->id)->get()
+            ->mapWithKeys(fn (Reward $reward) => [$reward->reward_type->value => (float) $reward->computed_amount])
+            ->all();
+
+        // Fixed cash and the badge were already issued; only the deltas are paid.
+        $this->assertEqualsCanonicalizing([
+            RewardType::Commission->value,
+            RewardType::CashPctRevenue->value,
+            RewardType::Override->value,
+        ], array_keys($amounts));
+        $this->assertEqualsWithDelta(500.0, $amounts[RewardType::Commission->value], 0.01);
+        $this->assertEqualsWithDelta(50.0, $amounts[RewardType::CashPctRevenue->value], 0.01);
+        $this->assertEqualsWithDelta(250.0, $amounts[RewardType::Override->value], 0.01);
+    }
 }

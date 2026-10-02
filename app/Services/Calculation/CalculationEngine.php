@@ -33,7 +33,7 @@ class CalculationEngine
     /** @var array<int, float> user_id => salary (for salary-based allocations) */
     protected array $salaries = [];
 
-    /** @var array<int, float> user_id => already-released commission (true-up mode) */
+    /** @var array<int, array<string, float>> user_id => reward_type => already-released amount (true-up mode) */
     protected array $alreadyPaid = [];
 
     /**
@@ -59,17 +59,10 @@ class CalculationEngine
             ->all();
 
         // True-up mode: what each rep was already paid on this plan (released
-        // commission from prior runs) — new commission is netted against it.
+        // cash rewards from prior runs, per type) — new amounts are netted against it.
         $this->alreadyPaid = [];
         if ($run->mode === 'true_up') {
-            $this->alreadyPaid = Reward::where('plan_id', $run->plan_id)
-                ->where('reward_type', RewardType::Commission->value)
-                ->where('status', PayoutStatus::Released->value)
-                ->where('calc_run_id', '!=', $run->id)
-                ->get()
-                ->groupBy('user_id')
-                ->map(fn ($rows) => (float) $rows->sum('computed_amount'))
-                ->all();
+            $this->alreadyPaid = $this->alreadyPaidByUserAndType($run);
         }
 
         $credited = 0;
@@ -196,6 +189,14 @@ class CalculationEngine
 
         foreach ($teamAttainment as $managerId => $teamAtt) {
             $amount = round($teamAtt * $pct / 100.0, 4);
+
+            if ($run->mode === 'true_up') {
+                $this->createTrueUpReward($run, $managerId, RewardType::Override, $amount, $snapshot['plan']['currency'] ?? 'USD',
+                    ['team_attainment' => $teamAtt, 'override_percent' => $pct]);
+
+                continue;
+            }
+
             if ($amount == 0.0) {
                 continue;
             }
@@ -276,7 +277,7 @@ class CalculationEngine
         // True-up: pay only the delta between newly-earned gross and what was
         // already released for this rep on this plan (can be negative — a claw-back).
         if ($run->mode === 'true_up') {
-            $paid = $this->alreadyPaid[$userId] ?? 0.0;
+            $paid = $this->alreadyPaid[$userId][RewardType::Commission->value] ?? 0.0;
             $meta['true_up'] = true;
             $meta['gross'] = round($total, 4);
             $meta['already_paid'] = round($paid, 4);
@@ -297,6 +298,10 @@ class CalculationEngine
     protected function applyRewardRules(CalcRun $run, int $userId, array $totals, array $rewardRules, array $snapshot): void
     {
         $currency = $snapshot['plan']['currency'] ?? 'USD';
+        $isTrueUp = $run->mode === 'true_up';
+
+        /** @var array<string, float> $grossByType */
+        $grossByType = [];
 
         foreach ($rewardRules as $rule) {
             $type = RewardType::tryFrom($rule['reward_type'] ?? '');
@@ -331,6 +336,14 @@ class CalculationEngine
                     break;
             }
 
+            if ($isTrueUp) {
+                if ($type->isCash()) {
+                    $grossByType[$type->value] = ($grossByType[$type->value] ?? 0.0) + ($amount ?? 0.0);
+                }
+
+                continue;
+            }
+
             Reward::create([
                 'calc_run_id' => $run->id,
                 'user_id' => $userId,
@@ -346,6 +359,99 @@ class CalculationEngine
                 'Applied reward rule: '.$type->label().'.',
                 ['reward_type' => $type->value, 'value' => $value]);
         }
+
+        if ($isTrueUp) {
+            $this->applyRewardRuleTrueUps($run, $userId, $grossByType, $currency);
+        }
+    }
+
+    /**
+     * True-up for reward-rule cash rewards: pay each type's gross minus what
+     * was already released for it, clawing back types released earlier but no
+     * longer earned. Commission and overrides are netted separately, and
+     * non-cash rewards are never re-issued.
+     *
+     * @param  array<string, float>  $grossByType
+     */
+    protected function applyRewardRuleTrueUps(CalcRun $run, int $userId, array $grossByType, string $currency): void
+    {
+        $types = array_diff(
+            array_unique(array_merge(array_keys($grossByType), array_keys($this->alreadyPaid[$userId] ?? []))),
+            [RewardType::Commission->value, RewardType::Override->value],
+        );
+
+        foreach ($types as $type) {
+            $this->createTrueUpReward($run, $userId, RewardType::from($type), $grossByType[$type] ?? 0.0, $currency);
+        }
+    }
+
+    /**
+     * Create a true-up reward for the delta between newly-earned gross and the
+     * amount of that type already released to the user on this plan. A zero
+     * delta creates nothing; a negative delta is a claw-back.
+     *
+     * @param  array<string, mixed>  $meta
+     */
+    protected function createTrueUpReward(CalcRun $run, int $userId, RewardType $type, float $gross, string $currency, array $meta = []): float
+    {
+        $paid = $this->alreadyPaid[$userId][$type->value] ?? 0.0;
+        $delta = round($gross - $paid, 4);
+
+        if ($delta == 0.0) {
+            return 0.0;
+        }
+
+        $meta = array_merge($meta, [
+            'true_up' => true,
+            'gross' => round($gross, 4),
+            'already_paid' => round($paid, 4),
+        ]);
+
+        Reward::create([
+            'calc_run_id' => $run->id,
+            'user_id' => $userId,
+            'plan_id' => $run->plan_id,
+            'reward_type' => $type->value,
+            'computed_amount' => $delta,
+            'currency' => $currency,
+            'meta' => $meta,
+            'status' => 'pending',
+        ]);
+
+        $this->log($run, 'true_up_applied', null, $userId, $meta['gross'], $delta,
+            $type->label().' true-up delta: gross '.$meta['gross'].' minus already-paid '.$meta['already_paid'].'.', $meta);
+
+        return $delta;
+    }
+
+    /**
+     * Released cash rewards from prior runs of this plan, summed per user and
+     * type. Manual adjustments are excluded: they are one-off corrections, not
+     * amounts a recalculation re-earns.
+     *
+     * @return array<int, array<string, float>>
+     */
+    protected function alreadyPaidByUserAndType(CalcRun $run): array
+    {
+        $cashTypes = collect(RewardType::cases())
+            ->filter(fn (RewardType $type): bool => $type->isCash() && $type !== RewardType::Adjustment)
+            ->map(fn (RewardType $type): string => $type->value)
+            ->values()
+            ->all();
+
+        $paid = [];
+
+        Reward::where('plan_id', $run->plan_id)
+            ->whereIn('reward_type', $cashTypes)
+            ->where('status', PayoutStatus::Released->value)
+            ->where('calc_run_id', '!=', $run->id)
+            ->get()
+            ->each(function (Reward $reward) use (&$paid): void {
+                $type = $reward->reward_type->value;
+                $paid[$reward->user_id][$type] = ($paid[$reward->user_id][$type] ?? 0.0) + (float) $reward->computed_amount;
+            });
+
+        return $paid;
     }
 
     /**
