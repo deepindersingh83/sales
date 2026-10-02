@@ -8,6 +8,7 @@ use App\Models\Transaction;
 use App\Models\Workspace;
 use App\Services\Connectors\Xero\XeroClient;
 use App\Services\Import\ScheduledImportRunner;
+use App\Services\Import\TransactionUpserter;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
 use Illuminate\Http\Client\RequestException;
@@ -131,6 +132,49 @@ class XeroConnectorTest extends TestCase
             ->get(route('admin.connectors.xero.callback', ['state' => 'forged', 'code' => 'abc']))
             ->assertRedirect(route('admin.connectors.index'))
             ->assertSessionHasErrors('xero');
+
+        $this->assertSame(0, ImportSource::count());
+    }
+
+    public function test_callback_handles_a_cancelled_consent(): void
+    {
+        $ws = Workspace::factory()->create();
+        $this->actingAsMember($ws, Role::FullAdmin);
+
+        $this->withSession(['xero_oauth_state' => 'good'])
+            ->get(route('admin.connectors.xero.callback', ['state' => 'good', 'error' => 'access_denied']))
+            ->assertRedirect(route('admin.connectors.index'))
+            ->assertSessionHasErrors(['xero' => 'Xero connection was cancelled.']);
+
+        $this->assertSame(0, ImportSource::count());
+    }
+
+    public function test_callback_reports_a_rejected_token_exchange(): void
+    {
+        $ws = Workspace::factory()->create();
+        $this->actingAsMember($ws, Role::FullAdmin);
+        Http::fake([XeroClient::TOKEN_URL => Http::response(['error' => 'invalid_client'], 400)]);
+
+        $this->withSession(['xero_oauth_state' => 'good'])
+            ->get(route('admin.connectors.xero.callback', ['state' => 'good', 'code' => 'abc']))
+            ->assertRedirect(route('admin.connectors.index'))
+            ->assertSessionHasErrors('xero');
+
+        $this->assertSame(0, ImportSource::count());
+    }
+
+    public function test_callback_requires_at_least_one_organisation(): void
+    {
+        $ws = Workspace::factory()->create();
+        $this->actingAsMember($ws, Role::FullAdmin);
+        Http::fake([
+            XeroClient::TOKEN_URL => Http::response(['access_token' => 'a', 'refresh_token' => 'r', 'expires_in' => 1800]),
+            XeroClient::CONNECTIONS_URL => Http::response([]),
+        ]);
+
+        $this->withSession(['xero_oauth_state' => 'good'])
+            ->get(route('admin.connectors.xero.callback', ['state' => 'good', 'code' => 'abc']))
+            ->assertSessionHasErrors(['xero' => 'No Xero organisation was authorised.']);
 
         $this->assertSame(0, ImportSource::count());
     }
@@ -265,6 +309,34 @@ class XeroConnectorTest extends TestCase
         $this->assertSame('refresh-2', $second->fresh()->credentials['refresh_token']);
         $this->assertSame('T-2', $second->fresh()->credentials['tenant_id']);
         $this->assertSame('other-refresh', $otherGrant->fresh()->credentials['refresh_token']);
+    }
+
+    public function test_a_failure_while_saving_transactions_is_recorded_on_the_source(): void
+    {
+        $ws = Workspace::factory()->create();
+        $source = $this->connectedSource($ws);
+        Http::fake(['api.xero.com/api.xro/2.0/Invoices*' => Http::response(['Invoices' => [$this->invoice('A', 'PAID', 10)]])]);
+        $this->mock(TransactionUpserter::class)->shouldReceive('upsert')->andThrow(new \RuntimeException('Deadlock found'));
+
+        try {
+            app(ScheduledImportRunner::class)->run($source);
+            $this->fail('Expected the sync to throw.');
+        } catch (\RuntimeException) {
+        }
+
+        $this->assertSame('Deadlock found', $source->fresh()->last_error);
+    }
+
+    public function test_a_feed_whose_rows_are_all_skipped_is_flagged(): void
+    {
+        $ws = Workspace::factory()->create();
+        $source = $this->connectedSource($ws);
+        Http::fake(['api.xero.com/api.xro/2.0/Invoices*' => Http::response(['Invoices' => [$this->invoice('', 'PAID', 10)]])]);
+
+        $result = app(ScheduledImportRunner::class)->run($source);
+
+        $this->assertSame(1, $result['skipped']);
+        $this->assertStringContainsString('All 1 rows were skipped', $source->fresh()->last_error);
     }
 
     public function test_failed_sync_records_the_error_and_keeps_the_cursor(): void

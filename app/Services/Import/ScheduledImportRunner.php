@@ -37,17 +37,23 @@ class ScheduledImportRunner
                 [$rows, $config] = $source->isConnector()
                     ? $this->connectorRows($source, $startedAt)
                     : $this->csvRows($source);
+
+                $result = $this->upserter->upsert($rows, $source->type ?: 'csv', $source);
             } catch (\Throwable $e) {
                 $source->forceFill(['last_error' => $e->getMessage()])->save();
 
                 throw $e;
             }
 
-            $result = $this->upserter->upsert($rows, $source->type ?: 'csv', $source);
+            // Rows arrived but none could be stored (e.g. no external_id
+            // column was detected): surface it instead of a silent "success".
+            $allSkipped = $result['skipped'] > 0 && $result['created'] + $result['updated'] === 0;
 
             $source->forceFill([
                 'last_synced_at' => $startedAt,
-                'last_error' => null,
+                'last_error' => $allSkipped
+                    ? "All {$result['skipped']} rows were skipped — check the file has an external ID column."
+                    : null,
                 'next_run_at' => $source->computeNextRunAt($startedAt),
                 'config' => $config,
             ])->save();
