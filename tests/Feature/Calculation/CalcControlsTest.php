@@ -6,10 +6,12 @@ use App\Actions\StartCalcRun;
 use App\Enums\CalcRunStatus;
 use App\Enums\PayoutStatus;
 use App\Enums\Role;
+use App\Jobs\RunCalculation;
 use App\Models\Alias;
 use App\Models\CalcRun;
 use App\Models\Credit;
 use App\Models\Plan;
+use App\Models\Reward;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Models\Workspace;
@@ -111,5 +113,28 @@ class CalcControlsTest extends TestCase
         $run->refresh();
         $this->assertNull($run->approved_at);
         $this->assertNull($run->approved_by_user_id);
+    }
+
+    public function test_a_redelivered_calculation_job_does_not_run_twice(): void
+    {
+        $ws = Workspace::factory()->create();
+        [$plan] = $this->base($ws);
+        Transaction::create(['workspace_id' => $ws->id, 'external_id' => 'T', 'source_system' => 'csv', 'amount' => 1000, 'currency' => 'USD', 'raw_data' => ['rep' => 'Alice']]);
+        $run = app(StartCalcRun::class)->handle($plan);
+
+        // The queue re-delivers the job while one worker is still running it, and again after it finished.
+        $run->update(['status' => CalcRunStatus::Running]);
+        RunCalculation::dispatchSync($run->id);
+        $run->update(['status' => CalcRunStatus::Completed]);
+        RunCalculation::dispatchSync($run->id);
+
+        $this->assertSame(1, Credit::where('calc_run_id', $run->id)->count());
+        $this->assertSame(1, Reward::where('calc_run_id', $run->id)->count());
+        $this->assertSame(CalcRunStatus::Completed, $run->fresh()->status);
+    }
+
+    public function test_database_queue_does_not_redeliver_a_calculation_before_it_times_out(): void
+    {
+        $this->assertGreaterThan((new RunCalculation(0))->timeout, config('queue.connections.database.retry_after'));
     }
 }
