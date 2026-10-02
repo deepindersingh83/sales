@@ -148,6 +148,10 @@ class CalculationEngine
                 $this->applyRewardRules($run, $userId, $totals, $rewardRules, $snapshot);
             }
 
+            if ($run->mode === 'true_up') {
+                $commissionTotal += $this->clawBackUncreditedUsers($run, $acc, $snapshot['plan']['currency'] ?? 'USD');
+            }
+
             $this->applyManagerOverrides($run, $snapshot, $acc);
 
             return [
@@ -160,6 +164,31 @@ class CalculationEngine
     }
 
     /**
+     * True-up for users already paid on this plan who have no credited
+     * transactions in this run: their gross is zero, so every released
+     * commission and reward-rule cash amount is clawed back. Overrides are
+     * handled by applyManagerOverrides().
+     *
+     * @param  array<int, array{attainment:float, revenue:float, profit:float}>  $acc
+     * @return float The commission clawed back (negative).
+     */
+    protected function clawBackUncreditedUsers(CalcRun $run, array $acc, string $currency): float
+    {
+        $commissionTotal = 0.0;
+
+        foreach (array_keys($this->alreadyPaid) as $userId) {
+            if (isset($acc[$userId])) {
+                continue;
+            }
+
+            $commissionTotal += $this->createTrueUpReward($run, $userId, RewardType::Commission, 0.0, $currency);
+            $this->applyRewardRuleTrueUps($run, $userId, [], $currency);
+        }
+
+        return $commissionTotal;
+    }
+
+    /**
      * A manager earns manager_override_percent of their direct reports'
      * credited attainment (single-level rollup).
      *
@@ -167,8 +196,9 @@ class CalculationEngine
      */
     protected function applyManagerOverrides(CalcRun $run, array $snapshot, array $acc): void
     {
+        $isTrueUp = $run->mode === 'true_up';
         $pct = $snapshot['plan']['manager_override_percent'] ?? null;
-        if ($pct === null || (float) $pct == 0.0) {
+        if (! $isTrueUp && ($pct === null || (float) $pct == 0.0)) {
             return;
         }
         $pct = (float) $pct;
@@ -187,10 +217,20 @@ class CalculationEngine
             }
         }
 
+        // True-up: managers paid an override before but with no credited team
+        // now earn zero, so their released override is clawed back.
+        if ($isTrueUp) {
+            foreach ($this->alreadyPaid as $userId => $paidByType) {
+                if (isset($paidByType[RewardType::Override->value])) {
+                    $teamAttainment[$userId] ??= 0.0;
+                }
+            }
+        }
+
         foreach ($teamAttainment as $managerId => $teamAtt) {
             $amount = round($teamAtt * $pct / 100.0, 4);
 
-            if ($run->mode === 'true_up') {
+            if ($isTrueUp) {
                 $this->createTrueUpReward($run, $managerId, RewardType::Override, $amount, $snapshot['plan']['currency'] ?? 'USD',
                     ['team_attainment' => $teamAtt, 'override_percent' => $pct]);
 

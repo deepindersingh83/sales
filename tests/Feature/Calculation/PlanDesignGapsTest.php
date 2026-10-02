@@ -127,4 +127,29 @@ class PlanDesignGapsTest extends TestCase
         $this->assertEqualsWithDelta(50.0, $amounts[RewardType::CashPctRevenue->value], 0.01);
         $this->assertEqualsWithDelta(250.0, $amounts[RewardType::Override->value], 0.01);
     }
+
+    public function test_true_up_claws_back_from_reps_with_no_credited_transactions(): void
+    {
+        $ws = Workspace::factory()->create();
+        [$plan, $rep] = $this->baseSetup($ws, ['manager_override_percent' => 5]);
+        $manager = User::factory()->create();
+        $ws->users()->attach($manager->id, ['role' => 'participant']);
+        $ws->users()->updateExistingPivot($rep->id, ['manager_id' => $manager->id]);
+        $plan->rewardRules()->create(['reward_type' => RewardType::CashFixed->value, 'value' => 100]);
+        $deal = Transaction::create(['workspace_id' => $ws->id, 'external_id' => 'T1', 'source_system' => 'csv', 'amount' => 10000, 'currency' => 'USD', 'raw_data' => ['rep' => 'Alice']]);
+
+        $run1 = app(StartCalcRun::class)->handle($plan);
+        Reward::where('calc_run_id', $run1->id)->update(['status' => PayoutStatus::Released]);
+
+        // The only deal is reversed out of scope, so Alice now earns nothing.
+        $deal->update(['excluded' => true]);
+        $run2 = app(StartCalcRun::class)->handle($plan, null, false, 'true_up');
+
+        $amount = fn (int $userId, RewardType $type): float => (float) Reward::where('calc_run_id', $run2->id)
+            ->where('user_id', $userId)->where('reward_type', $type->value)->value('computed_amount');
+
+        $this->assertEqualsWithDelta(-1000.0, $amount($rep->id, RewardType::Commission), 0.01);
+        $this->assertEqualsWithDelta(-100.0, $amount($rep->id, RewardType::CashFixed), 0.01);
+        $this->assertEqualsWithDelta(-500.0, $amount($manager->id, RewardType::Override), 0.01);
+    }
 }
