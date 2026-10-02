@@ -29,6 +29,7 @@ class User extends Authenticatable implements MustVerifyEmail
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'is_super_admin' => 'boolean',
         ];
     }
 
@@ -40,6 +41,12 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->belongsToMany(Workspace::class, 'workspace_user')
             ->withPivot(['role', 'manager_id'])
             ->withTimestamps();
+    }
+
+    /** A platform operator who may enter any workspace as its Full Admin. */
+    public function isSuperAdmin(): bool
+    {
+        return (bool) $this->is_super_admin;
     }
 
     public function belongsToWorkspace(Workspace|int $workspace): bool

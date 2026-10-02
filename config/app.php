@@ -76,6 +76,13 @@ return [
     'import_date_order' => env('IMPORT_DATE_ORDER', 'dmy'),
 
     /*
+    | Platform super admin: this account can enter every workspace as Full
+    | Admin. Create or promote it with `php artisan app:super-admin`.
+    */
+
+    'super_admin_email' => env('SUPER_ADMIN_EMAIL'),
+
+    /*
     |--------------------------------------------------------------------------
     | Application Locale Configuration
     |--------------------------------------------------------------------------

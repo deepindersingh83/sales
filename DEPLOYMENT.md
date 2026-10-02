@@ -103,6 +103,21 @@ php artisan users:verify --all                 # every account you trust
 Only use `--all` if you trust every existing account: it also verifies any
 account registered with an address its owner does not control.
 
+## 6b. Super admin account
+
+Set `SUPER_ADMIN_EMAIL` in `.env`, then run:
+
+```bash
+php artisan app:super-admin            # or: php artisan app:super-admin you@company.com
+```
+
+It is safe to run on every deploy. An existing account keeps its password and
+is marked verified and promoted; a missing account is created and a one-time
+password is printed. The super admin can enter every company from the company
+switcher (joining it as Full Admin). `php artisan migrate` also promotes the
+`SUPER_ADMIN_EMAIL` account automatically if it already exists — only set it to
+an address you control and whose account you created yourself.
+
 ## Troubleshooting
 
 ### `tempnam(): file created in the system's temporary directory` (HTTP 500)

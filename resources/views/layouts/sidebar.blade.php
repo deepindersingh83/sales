@@ -5,6 +5,10 @@
     $isFullAdmin = $role === \App\Enums\Role::FullAdmin;
     $workspace = app(\App\Support\WorkspaceContext::class)->get();
     $myWorkspaces = $user?->workspaces()->orderBy('name')->get() ?? collect();
+    // Super admins can also enter companies they are not (yet) a member of.
+    $otherWorkspaces = $user?->isSuperAdmin()
+        ? \App\Models\Workspace::whereNotIn('id', $myWorkspaces->pluck('id'))->orderBy('name')->get()
+        : collect();
 
     // Inline icon set (Heroicons outline, 20px).
     $ico = [
@@ -53,6 +57,15 @@
                     </button>
                 </form>
             @endforeach
+            @if ($otherWorkspaces->isNotEmpty())
+                <div class="px-3 pt-2 pb-1 text-[11px] uppercase tracking-wide text-slate-400 border-t border-slate-100">All companies (super admin)</div>
+                @foreach ($otherWorkspaces as $ws)
+                    <form method="POST" action="{{ route('workspaces.switch', $ws) }}">
+                        @csrf
+                        <button class="w-full px-3 py-2 text-sm text-left text-slate-600 hover:bg-slate-50 truncate">{{ $ws->name }}</button>
+                    </form>
+                @endforeach
+            @endif
             <a href="{{ route('workspaces.create') }}" class="block px-3 py-2 text-sm text-brand-600 hover:bg-slate-50 border-t border-slate-100">+ New company</a>
         </div>
     </div>
