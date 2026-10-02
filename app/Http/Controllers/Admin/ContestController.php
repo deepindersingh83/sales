@@ -18,6 +18,8 @@ class ContestController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
+        $this->authorizeWrite($request);
+
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'metric' => ['required', 'in:credited,payout'],
@@ -39,10 +41,18 @@ class ContestController extends Controller
         ]);
     }
 
-    public function destroy(Contest $contest): RedirectResponse
+    public function destroy(Request $request, Contest $contest): RedirectResponse
     {
+        $this->authorizeWrite($request);
+
         $contest->delete();
 
         return redirect()->route('admin.contests.index')->with('status', 'Contest deleted.');
+    }
+
+    /** Limited Admins are read-only; only Full and Plan Admins may change data. */
+    protected function authorizeWrite(Request $request): void
+    {
+        abort_unless($request->user()->currentRole()?->canWrite(), 403);
     }
 }

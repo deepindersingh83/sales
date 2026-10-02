@@ -34,6 +34,8 @@ class ProductController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
+        $this->authorizeWrite($request);
+
         $data = $this->validated($request);
 
         $product = Product::create($data['attributes']);
@@ -44,6 +46,8 @@ class ProductController extends Controller
 
     public function update(Request $request, Product $product): RedirectResponse
     {
+        $this->authorizeWrite($request);
+
         $data = $this->validated($request, $product);
 
         $product->update($data['attributes']);
@@ -52,8 +56,10 @@ class ProductController extends Controller
         return redirect()->route('admin.products.index')->with('status', 'Product updated.');
     }
 
-    public function destroy(Product $product): RedirectResponse
+    public function destroy(Request $request, Product $product): RedirectResponse
     {
+        $this->authorizeWrite($request);
+
         $product->delete();
 
         return redirect()->route('admin.products.index')->with('status', 'Product removed.');
@@ -92,5 +98,11 @@ class ProductController extends Controller
             ],
             'tags' => array_filter(array_map('trim', explode(',', $validated['tags'] ?? ''))),
         ];
+    }
+
+    /** Limited Admins are read-only; only Full and Plan Admins may change data. */
+    protected function authorizeWrite(Request $request): void
+    {
+        abort_unless($request->user()->currentRole()?->canWrite(), 403);
     }
 }

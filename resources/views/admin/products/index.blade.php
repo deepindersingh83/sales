@@ -9,6 +9,7 @@
         @endif
 
         {{-- Add a product --}}
+        @if (auth()->user()->currentRole()?->canWrite())
         <x-ui.card>
             <h2 class="text-sm font-semibold text-slate-800 mb-3">Add a product</h2>
             <form method="POST" action="{{ route('admin.products.store') }}" class="grid grid-cols-1 sm:grid-cols-6 gap-3 items-end">
@@ -48,6 +49,7 @@
                 </div>
             </form>
         </x-ui.card>
+        @endif
 
         {{-- Filter --}}
         <form method="GET" action="{{ route('admin.products.index') }}" class="flex gap-2">
@@ -84,10 +86,12 @@
                                 @endif
                             </td>
                             <td class="px-6 py-3 text-right">
+                                @if (auth()->user()->currentRole()?->canWrite())
                                 <form method="POST" action="{{ route('admin.products.destroy', $product) }}" onsubmit="return confirm('Remove this product?')">
                                     @csrf @method('DELETE')
                                     <button class="text-rose-600 hover:text-rose-800 text-sm">Remove</button>
                                 </form>
+                                @endif
                             </td>
                         </tr>
                     @empty
