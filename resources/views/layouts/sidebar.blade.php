@@ -63,7 +63,7 @@
     <form method="GET" action="{{ route('search.index') }}" class="px-1 pb-2">
         <div class="relative">
             <svg class="w-4 h-4 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" stroke-width="1.7" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/></svg>
-            <input type="search" name="q" value="{{ request('q') }}" placeholder="Search…" class="w-full pl-8 pr-2 py-1.5 text-sm rounded-lg border-slate-200 focus:border-brand-400 focus:ring-brand-400" />
+            <input type="search" name="q" value="{{ is_string(request('q')) ? request('q') : '' }}" placeholder="Search…" class="w-full pl-8 pr-2 py-1.5 text-sm rounded-lg border-slate-200 focus:border-brand-400 focus:ring-brand-400" />
         </div>
     </form>
 

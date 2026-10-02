@@ -12,21 +12,25 @@ use Illuminate\Http\Request;
 use Illuminate\View\View;
 
 /**
- * Global search across the current workspace: transactions, plans, products,
- * tags and (for admins) members. Everything is workspace-scoped by the global
- * scope, so results never cross tenants.
+ * Global search across the current workspace: products and tags for everyone;
+ * transactions, plans (only those the admin may view) and members for admins.
+ * Everything is workspace-scoped by the global scope, so results never cross
+ * tenants, and participants never see other reps' deals.
  */
 class SearchController extends Controller
 {
     public function index(Request $request): View
     {
-        $term = trim((string) $request->query('q'));
+        $query = $request->query('q');
+        $term = is_string($query) ? trim($query) : '';
         $groups = [];
+        $user = $request->user();
+        $isAdmin = (bool) $user?->currentRole()?->isAdmin();
 
         if ($term !== '') {
             $like = "%{$term}%";
 
-            $groups['Transactions'] = Transaction::query()
+            $groups['Transactions'] = ! $isAdmin ? collect() : Transaction::query()
                 ->where('external_id', 'like', $like)
                 ->limit(10)->get()
                 ->map(fn (Transaction $t) => [
@@ -35,12 +39,14 @@ class SearchController extends Controller
                     'url' => route('admin.transactions.index', ['q' => $t->external_id]),
                 ]);
 
-            $groups['Plans'] = Plan::query()
+            $groups['Plans'] = ! $isAdmin ? collect() : Plan::query()
                 ->where('name', 'like', $like)
-                ->limit(10)->get()
+                ->limit(50)->get()
+                ->filter(fn (Plan $p) => $user->canViewPlan($p))
+                ->take(10)
                 ->map(fn (Plan $p) => [
                     'label' => $p->name,
-                    'meta' => ucfirst((string) $p->status),
+                    'meta' => $p->status->label(),
                     'url' => route('admin.plans.show', $p),
                 ]);
 
@@ -62,7 +68,7 @@ class SearchController extends Controller
                     'url' => route('search.index', ['q' => $t->name]),
                 ]);
 
-            if ($request->user()?->currentRole()?->isAdmin()) {
+            if ($isAdmin) {
                 $workspaceId = app(WorkspaceContext::class)->id();
                 $groups['Members'] = Workspace::withoutGlobalScopes()
                     ->findOrFail($workspaceId)

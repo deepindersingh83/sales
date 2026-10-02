@@ -20,7 +20,10 @@ class ProductController extends Controller
     {
         $query = Product::query()->orderBy('name');
 
-        if ($term = trim((string) $request->query('q'))) {
+        $search = $request->query('q');
+        $term = is_string($search) ? trim($search) : '';
+
+        if ($term !== '') {
             $query->where(function ($q) use ($term) {
                 $q->where('name', 'like', "%{$term}%")->orWhere('sku', 'like', "%{$term}%");
             });
@@ -28,7 +31,7 @@ class ProductController extends Controller
 
         return view('admin.products.index', [
             'products' => $query->with('tags')->paginate(25)->withQueryString(),
-            'search' => $request->query('q'),
+            'search' => $term,
         ]);
     }
 
