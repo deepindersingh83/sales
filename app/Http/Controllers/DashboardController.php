@@ -40,7 +40,9 @@ class DashboardController extends Controller
                 'pendingCredits' => Credit::where('status', PayoutStatus::Pending)->count(),
                 'openDisputes' => Dispute::where('status', '!=', DisputeStatus::Resolved)->count(),
             ],
-            'recentRuns' => CalcRun::with('plan')->latest()->take(5)->get(),
+            'recentRuns' => CalcRun::with('plan')->latest()->take(50)->get()
+                ->filter(fn (CalcRun $run) => $run->plan && $user->canViewPlan($run->plan))
+                ->take(5),
         ]);
     }
 

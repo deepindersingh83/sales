@@ -5,6 +5,10 @@
     $isFullAdmin = $role === \App\Enums\Role::FullAdmin;
     $workspace = app(\App\Support\WorkspaceContext::class)->get();
     $myWorkspaces = $user?->workspaces()->orderBy('name')->get() ?? collect();
+    // Super admins can also enter companies they are not (yet) a member of.
+    $otherWorkspaces = $user?->isSuperAdmin()
+        ? \App\Models\Workspace::whereNotIn('id', $myWorkspaces->pluck('id'))->orderBy('name')->get()
+        : collect();
 
     // Inline icon set (Heroicons outline, 20px).
     $ico = [
@@ -53,6 +57,15 @@
                     </button>
                 </form>
             @endforeach
+            @if ($otherWorkspaces->isNotEmpty())
+                <div class="px-3 pt-2 pb-1 text-[11px] uppercase tracking-wide text-slate-400 border-t border-slate-100">All companies (super admin)</div>
+                @foreach ($otherWorkspaces as $ws)
+                    <form method="POST" action="{{ route('workspaces.switch', $ws) }}">
+                        @csrf
+                        <button class="w-full px-3 py-2 text-sm text-left text-slate-600 hover:bg-slate-50 truncate">{{ $ws->name }}</button>
+                    </form>
+                @endforeach
+            @endif
             <a href="{{ route('workspaces.create') }}" class="block px-3 py-2 text-sm text-brand-600 hover:bg-slate-50 border-t border-slate-100">+ New company</a>
         </div>
     </div>
@@ -63,7 +76,7 @@
     <form method="GET" action="{{ route('search.index') }}" class="px-1 pb-2">
         <div class="relative">
             <svg class="w-4 h-4 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" stroke-width="1.7" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/></svg>
-            <input type="search" name="q" value="{{ request('q') }}" placeholder="Search…" class="w-full pl-8 pr-2 py-1.5 text-sm rounded-lg border-slate-200 focus:border-brand-400 focus:ring-brand-400" />
+            <input type="search" name="q" value="{{ is_string(request('q')) ? request('q') : '' }}" placeholder="Search…" class="w-full pl-8 pr-2 py-1.5 text-sm rounded-lg border-slate-200 focus:border-brand-400 focus:ring-brand-400" />
         </div>
     </form>
 

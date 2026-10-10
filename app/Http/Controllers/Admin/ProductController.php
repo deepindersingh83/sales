@@ -20,7 +20,10 @@ class ProductController extends Controller
     {
         $query = Product::query()->orderBy('name');
 
-        if ($term = trim((string) $request->query('q'))) {
+        $search = $request->query('q');
+        $term = is_string($search) ? trim($search) : '';
+
+        if ($term !== '') {
             $query->where(function ($q) use ($term) {
                 $q->where('name', 'like', "%{$term}%")->orWhere('sku', 'like', "%{$term}%");
             });
@@ -28,12 +31,14 @@ class ProductController extends Controller
 
         return view('admin.products.index', [
             'products' => $query->with('tags')->paginate(25)->withQueryString(),
-            'search' => $request->query('q'),
+            'search' => $term,
         ]);
     }
 
     public function store(Request $request): RedirectResponse
     {
+        $this->authorizeWrite($request);
+
         $data = $this->validated($request);
 
         $product = Product::create($data['attributes']);
@@ -44,6 +49,8 @@ class ProductController extends Controller
 
     public function update(Request $request, Product $product): RedirectResponse
     {
+        $this->authorizeWrite($request);
+
         $data = $this->validated($request, $product);
 
         $product->update($data['attributes']);
@@ -52,8 +59,10 @@ class ProductController extends Controller
         return redirect()->route('admin.products.index')->with('status', 'Product updated.');
     }
 
-    public function destroy(Product $product): RedirectResponse
+    public function destroy(Request $request, Product $product): RedirectResponse
     {
+        $this->authorizeWrite($request);
+
         $product->delete();
 
         return redirect()->route('admin.products.index')->with('status', 'Product removed.');
@@ -92,5 +101,11 @@ class ProductController extends Controller
             ],
             'tags' => array_filter(array_map('trim', explode(',', $validated['tags'] ?? ''))),
         ];
+    }
+
+    /** Limited Admins are read-only; only Full and Plan Admins may change data. */
+    protected function authorizeWrite(Request $request): void
+    {
+        abort_unless($request->user()->currentRole()?->canWrite(), 403);
     }
 }

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Actions\SimulateCalc;
 use App\Actions\StartCalcRun;
+use App\Enums\CalcRunStatus;
 use App\Http\Controllers\Controller;
 use App\Models\CalcRun;
 use App\Models\Plan;
@@ -43,6 +44,14 @@ class CalcRunController extends Controller
     public function approve(CalcRun $calcRun): RedirectResponse
     {
         Gate::authorize('release', $calcRun);
+
+        if ($calcRun->status !== CalcRunStatus::Completed) {
+            return back()->withErrors(['approval' => 'Only a completed run can be approved.']);
+        }
+
+        if ($calcRun->approved_at !== null) {
+            return back()->withErrors(['approval' => 'This run is already approved.']);
+        }
 
         $calcRun->update([
             'approved_at' => now(),

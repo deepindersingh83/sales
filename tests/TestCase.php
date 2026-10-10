@@ -11,6 +11,17 @@ use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
 abstract class TestCase extends BaseTestCase
 {
     /**
+     * Pages render without compiled front-end assets, so the suite does not
+     * depend on `npm run build` having been run (CI never runs it).
+     */
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->withoutVite();
+    }
+
+    /**
      * Create a user and attach them to a workspace with the given role.
      */
     protected function makeMember(Workspace $workspace, Role $role, array $attributes = []): User

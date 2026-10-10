@@ -1,24 +1,26 @@
 <?php
 
 use App\Http\Controllers\Admin\AliasController;
+use App\Http\Controllers\Admin\AnnouncementController;
+use App\Http\Controllers\Admin\BillingController;
 use App\Http\Controllers\Admin\CalcRunController;
 use App\Http\Controllers\Admin\CalcRunReleaseController;
 use App\Http\Controllers\Admin\ConnectorController;
-use App\Http\Controllers\Admin\AnnouncementController;
-use App\Http\Controllers\Admin\BillingController;
+use App\Http\Controllers\Admin\ContestController;
 use App\Http\Controllers\Admin\DisputeQueueController;
 use App\Http\Controllers\Admin\FxRateController;
+use App\Http\Controllers\Admin\ImportSourceController;
 use App\Http\Controllers\Admin\MemberController;
+use App\Http\Controllers\Admin\MemberImportController;
 use App\Http\Controllers\Admin\PlanAccessController;
 use App\Http\Controllers\Admin\PlanController;
+use App\Http\Controllers\Admin\ProductController;
 use App\Http\Controllers\Admin\ReportController;
 use App\Http\Controllers\Admin\TransactionController;
 use App\Http\Controllers\Admin\TransactionImportController;
 use App\Http\Controllers\Admin\WorkspaceSettingsController;
-use App\Http\Controllers\Admin\ContestController;
-use App\Http\Controllers\Admin\ImportSourceController;
-use App\Http\Controllers\Admin\MemberImportController;
-use App\Http\Controllers\Admin\ProductController;
+use App\Http\Controllers\Admin\XeroConnectionController;
+use App\Http\Controllers\Admin\XeroSettingsController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DisputeController;
 use App\Http\Controllers\EnrollmentController;
@@ -38,10 +40,15 @@ Route::get('/dashboard', [DashboardController::class, 'index'])
     ->middleware(['auth', 'verified'])
     ->name('dashboard');
 
+// Profile stays reachable before verification, so a mistyped email can be fixed.
 Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+});
+
+// Everything else requires a verified email address.
+Route::middleware(['auth', 'verified'])->group(function () {
 
     // Disputes — participants raise and follow their own; admins triage via the
     // admin queue. Per-record access is enforced by DisputePolicy.
@@ -76,7 +83,7 @@ Route::middleware('auth')->group(function () {
 
 // Admin area — any workspace role except Participant. Per-record authorization
 // is enforced by policies inside each controller action.
-Route::middleware(['auth', 'workspace.admin'])
+Route::middleware(['auth', 'verified', 'workspace.admin'])
     ->prefix('admin')
     ->name('admin.')
     ->group(function () {
@@ -174,9 +181,28 @@ Route::middleware(['auth', 'workspace.admin'])
         Route::get('reports/overview', [ReportController::class, 'overview'])->name('reports.overview');
         Route::get('reports/attainment', [ReportController::class, 'attainment'])->name('reports.attainment');
         Route::get('reports/liability', [ReportController::class, 'liability'])->name('reports.liability');
+        Route::get('reports/payout-by-type', [ReportController::class, 'payoutByType'])->name('reports.payout-by-type');
+        Route::get('reports/payout-by-month', [ReportController::class, 'payoutByMonth'])->name('reports.payout-by-month');
+        Route::get('reports/uncredited', [ReportController::class, 'uncredited'])->name('reports.uncredited');
+        Route::get('reports/quota-attainment', [ReportController::class, 'quotaAttainment'])->name('reports.quota-attainment');
+        Route::get('reports/attainment-by-plan', [ReportController::class, 'attainmentByPlan'])->name('reports.attainment-by-plan');
+        Route::get('reports/attainment-by-team', [ReportController::class, 'attainmentByManager'])->name('reports.attainment-by-team');
+        Route::get('reports/attainment-distribution', [ReportController::class, 'attainmentDistribution'])->name('reports.attainment-distribution');
+        Route::get('reports/revenue', [ReportController::class, 'revenue'])->name('reports.revenue');
+        Route::get('reports/customers', [ReportController::class, 'customers'])->name('reports.customers');
 
         // Integrations catalogue (connector framework).
         Route::get('connectors', [ConnectorController::class, 'index'])->name('connectors.index');
+        Route::get('connectors/xero/connect', [XeroConnectionController::class, 'connect'])->name('connectors.xero.connect');
+        Route::get('connectors/xero/callback', [XeroConnectionController::class, 'callback'])->name('connectors.xero.callback');
+
+        // Xero settings: app keys, and each organisation's health/schedule/disconnect.
+        Route::get('connectors/xero', [XeroSettingsController::class, 'show'])->name('connectors.xero.show');
+        Route::put('connectors/xero/app', [XeroSettingsController::class, 'updateApp'])->name('connectors.xero.app.update');
+        Route::delete('connectors/xero/app', [XeroSettingsController::class, 'destroyApp'])->name('connectors.xero.app.destroy');
+        Route::post('connectors/xero/{source}/check', [XeroSettingsController::class, 'check'])->whereNumber('source')->name('connectors.xero.check');
+        Route::put('connectors/xero/{source}', [XeroSettingsController::class, 'update'])->whereNumber('source')->name('connectors.xero.update');
+        Route::delete('connectors/xero/{source}', [XeroSettingsController::class, 'destroy'])->whereNumber('source')->name('connectors.xero.destroy');
     });
 
 require __DIR__.'/auth.php';

@@ -7,6 +7,7 @@
         @if (session('status'))
             <div class="rounded-lg bg-emerald-50 border border-emerald-200 p-4 text-sm text-emerald-800">{{ session('status') }}</div>
         @endif
+        <x-input-error :messages="$errors->get('tier')" />
 
         @unless ($stripeEnabled)
             <div class="rounded-lg bg-amber-50 border border-amber-200 p-4 text-sm text-amber-800">

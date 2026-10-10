@@ -27,17 +27,27 @@ class RunCalculation implements ShouldQueue
 
     public function handle(CalculationEngine $engine, WorkspaceContext $context): void
     {
+        // Atomically claim the queued run. A re-delivered copy of this job (e.g.
+        // the queue's retry_after elapsed mid-run) finds it no longer queued and
+        // exits, instead of writing a second set of credits and rewards.
+        $claimed = CalcRun::withoutGlobalScopes()
+            ->where('id', $this->calcRunId)
+            ->where('status', CalcRunStatus::Queued->value)
+            ->update([
+                'status' => CalcRunStatus::Running->value,
+                'started_at' => now(),
+                'error' => null,
+            ]);
+
+        if ($claimed === 0) {
+            return;
+        }
+
         // Load the run without tenant scope (context not set yet), then pin the
         // context to its workspace for the remainder of the job.
         $run = CalcRun::withoutGlobalScopes()->findOrFail($this->calcRunId);
 
         $context->set($run->workspace_id);
-
-        $run->update([
-            'status' => CalcRunStatus::Running,
-            'started_at' => now(),
-            'error' => null,
-        ]);
 
         try {
             $engine->run($run);

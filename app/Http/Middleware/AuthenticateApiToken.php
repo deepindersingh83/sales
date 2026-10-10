@@ -19,21 +19,28 @@ class AuthenticateApiToken
 
     public function handle(Request $request, Closure $next): Response
     {
-        $token = $request->bearerToken() ?: $request->header('X-Api-Token');
+        // BI tools (Power BI, Excel OData feeds) can only send Basic auth, so
+        // the token is also accepted as the Basic-auth password.
+        $token = $request->bearerToken() ?: $request->header('X-Api-Token') ?: $request->getPassword();
 
         if (! $token) {
-            return response()->json(['message' => 'Missing API token.'], 401);
+            return $this->unauthorized('Missing API token.');
         }
 
-        $workspace = Workspace::where('api_token', $token)->first();
+        $workspace = Workspace::findByApiToken($token);
 
         if (! $workspace) {
-            return response()->json(['message' => 'Invalid API token.'], 401);
+            return $this->unauthorized('Invalid API token.');
         }
 
         $this->context->set($workspace);
         $request->attributes->set('workspace', $workspace);
 
         return $next($request);
+    }
+
+    protected function unauthorized(string $message): Response
+    {
+        return response()->json(['message' => $message], 401, ['WWW-Authenticate' => 'Basic realm="API", charset="UTF-8"']);
     }
 }

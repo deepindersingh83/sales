@@ -83,6 +83,41 @@ Without a worker, calc runs stay in the `queued` state and never complete.
 Point the site's document root at `public/` (CloudPanel: site's "Root
 Directory" → `.../htdocs/<domain>/public`).
 
+## 6a. Email (required — accounts must verify their address)
+
+Every account must verify its email address before using the app; this stops
+someone pre-registering a colleague's address and being granted access when an
+admin adds that address. Configure a real mailer in `.env` (`MAIL_MAILER`,
+`MAIL_HOST`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM_ADDRESS`) — the
+default `log` mailer only writes emails to the log.
+
+**Upgrading an existing install:** accounts created before verification was
+switched on are unverified, so on their next visit users are asked to click a
+verification link (a password reset also verifies). To verify accounts by hand:
+
+```bash
+php artisan users:verify someone@company.com   # one account
+php artisan users:verify --all                 # every account you trust
+```
+
+Only use `--all` if you trust every existing account: it also verifies any
+account registered with an address its owner does not control.
+
+## 6b. Super admin account
+
+Set `SUPER_ADMIN_EMAIL` in `.env`, then run:
+
+```bash
+php artisan app:super-admin            # or: php artisan app:super-admin you@company.com
+```
+
+It is safe to run on every deploy. An existing account keeps its password and
+is marked verified and promoted; a missing account is created and a one-time
+password is printed. The super admin can enter every company from the company
+switcher (joining it as Full Admin). `php artisan migrate` also promotes the
+`SUPER_ADMIN_EMAIL` account automatically if it already exists — only set it to
+an address you control and whose account you created yourself.
+
 ## Troubleshooting
 
 ### `tempnam(): file created in the system's temporary directory` (HTTP 500)

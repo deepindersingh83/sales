@@ -9,6 +9,7 @@ use App\Models\Transaction;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 class DisputeController extends Controller
@@ -27,14 +28,7 @@ class DisputeController extends Controller
     {
         Gate::authorize('create', Dispute::class);
 
-        // Transactions the rep can reference: those they hold a released credit for.
-        $transactionIds = Credit::released()
-            ->where('user_id', $request->user()->id)
-            ->pluck('transaction_id')
-            ->filter()
-            ->unique();
-
-        $transactions = Transaction::whereIn('id', $transactionIds)->get();
+        $transactions = Transaction::whereIn('id', $this->creditedTransactionIds($request))->get();
 
         return view('disputes.create', ['transactions' => $transactions]);
     }
@@ -46,7 +40,8 @@ class DisputeController extends Controller
         $data = $request->validate([
             'category' => ['required', 'string', 'max:100'],
             'description' => ['required', 'string'],
-            'transaction_id' => ['nullable', 'integer', 'exists:transactions,id'],
+            // Only a transaction the rep was credited for (as offered on the form).
+            'transaction_id' => ['nullable', 'integer', Rule::in($this->creditedTransactionIds($request))],
         ]);
 
         $dispute = Dispute::create([
@@ -80,8 +75,25 @@ class DisputeController extends Controller
             'status' => DisputeStatus::Open,
         ]);
 
-        return redirect()->route('disputes.show', $dispute)->with('status',
-            $transaction ? 'Claim submitted for review.' : 'Claim submitted — that transaction id was not found, an admin will check.');
+        // Same answer whether or not the id exists, so claims can't be used to
+        // probe which deals are in the workspace.
+        return redirect()->route('disputes.show', $dispute)->with('status', 'Claim submitted for review.');
+    }
+
+    /**
+     * Transactions the rep may reference: those they hold a released credit for.
+     *
+     * @return array<int, int>
+     */
+    protected function creditedTransactionIds(Request $request): array
+    {
+        return Credit::released()
+            ->where('user_id', $request->user()->id)
+            ->pluck('transaction_id')
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
     }
 
     public function show(Dispute $dispute): View

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Actions\ProvisionWorkspace;
+use App\Enums\Role;
 use App\Models\Workspace;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -14,10 +15,18 @@ use Illuminate\View\View;
  */
 class WorkspaceController extends Controller
 {
-    /** Switch the active workspace (must be a member). */
+    /**
+     * Switch the active workspace. Members only — except a platform super
+     * admin, who joins any workspace as its Full Admin on first entry.
+     */
     public function switch(Request $request, Workspace $workspace): RedirectResponse
     {
-        abort_unless($request->user()->belongsToWorkspace($workspace), 403);
+        $user = $request->user();
+
+        if (! $user->belongsToWorkspace($workspace)) {
+            abort_unless($user->isSuperAdmin(), 403);
+            $workspace->users()->attach($user->id, ['role' => Role::FullAdmin->value]);
+        }
 
         $request->session()->put('current_workspace_id', $workspace->id);
 

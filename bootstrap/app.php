@@ -1,9 +1,14 @@
 <?php
 
+use App\Http\Middleware\AuthenticateApiToken;
+use App\Http\Middleware\EnsureUserHasRole;
+use App\Http\Middleware\EnsureWorkspaceAdmin;
+use App\Http\Middleware\ResolveWorkspace;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
+use Illuminate\Routing\Middleware\SubstituteBindings;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -16,14 +21,22 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         // Resolve the current workspace on every web request, after auth.
         $middleware->web(append: [
-            \App\Http\Middleware\ResolveWorkspace::class,
+            ResolveWorkspace::class,
         ]);
+
+        // ...and before route-model binding, which queries tenant-scoped
+        // models: with no workspace resolved yet the scope matches nothing
+        // and every {plan}/{calcRun}/{dispute} URL would 404.
+        $middleware->prependToPriorityList(
+            before: SubstituteBindings::class,
+            prepend: ResolveWorkspace::class,
+        );
 
         // Role-based route guard, used as e.g. ->middleware('role:full_admin,plan_admin').
         $middleware->alias([
-            'role' => \App\Http\Middleware\EnsureUserHasRole::class,
-            'workspace.admin' => \App\Http\Middleware\EnsureWorkspaceAdmin::class,
-            'auth.api' => \App\Http\Middleware\AuthenticateApiToken::class,
+            'role' => EnsureUserHasRole::class,
+            'workspace.admin' => EnsureWorkspaceAdmin::class,
+            'auth.api' => AuthenticateApiToken::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

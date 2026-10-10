@@ -87,6 +87,31 @@ class BillingTest extends TestCase
         $this->assertNull($ws->payeeLimit());
     }
 
+    public function test_an_expired_trial_cannot_be_restarted(): void
+    {
+        $ws = Workspace::factory()->create(['subscription_tier' => 'free', 'trial_ends_at' => now()->subDay()]);
+        $this->actingAsMember($ws, Role::FullAdmin);
+
+        $this->post(route('admin.billing.trial'))->assertRedirect(route('admin.billing.index'));
+
+        $this->assertTrue($ws->fresh()->trial_ends_at->isPast());
+        $this->assertNotNull($ws->fresh()->payeeLimit());
+    }
+
+    public function test_cannot_downgrade_to_free_while_over_its_member_cap(): void
+    {
+        $ws = Workspace::factory()->create(['subscription_tier' => 'business']);
+        $this->actingAsMember($ws, Role::FullAdmin);
+        $cap = config('billing.tiers.free.max_payees');
+        foreach (range(1, $cap) as $i) {
+            $this->makeMember($ws, Role::Participant);
+        }
+
+        $this->put(route('admin.billing.update'), ['tier' => 'free'])->assertSessionHasErrors('tier');
+
+        $this->assertSame('business', $ws->fresh()->subscription_tier);
+    }
+
     public function test_admin_can_upgrade_tier(): void
     {
         $ws = Workspace::factory()->create(['subscription_tier' => 'free']);

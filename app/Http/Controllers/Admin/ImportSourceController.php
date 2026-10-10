@@ -77,7 +77,7 @@ class ImportSourceController extends Controller
             return back()->withErrors(['run' => $e->getMessage()]);
         }
 
-        return redirect()->route('admin.import-sources.index')->with('status', $status);
+        return back()->with('status', $status);
     }
 
     public function destroy(ImportSource $source): RedirectResponse

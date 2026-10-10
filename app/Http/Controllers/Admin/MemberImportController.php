@@ -6,6 +6,7 @@ use App\Enums\Role;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Models\Workspace;
+use App\Services\Billing\UsageMeter;
 use App\Services\Import\CsvReader;
 use App\Support\WorkspaceContext;
 use Illuminate\Http\RedirectResponse;
@@ -22,7 +23,10 @@ use Illuminate\View\View;
  */
 class MemberImportController extends Controller
 {
-    public function __construct(protected CsvReader $reader) {}
+    public function __construct(
+        protected CsvReader $reader,
+        protected UsageMeter $usage,
+    ) {}
 
     public function create(): View
     {
@@ -64,23 +68,53 @@ class MemberImportController extends Controller
             $roleValue = $this->normaliseRole($this->col($row, ['role']));
             $salaryRaw = trim($this->col($row, ['salary', 'base salary']));
             $salary = is_numeric($salaryRaw) ? (float) $salaryRaw : null;
+            $existing = User::where('email', $email)->first();
 
-            $user = User::where('email', $email)->first();
-            if (! $user) {
-                $user = User::create([
-                    'name' => $name ?: Str::before($email, '@'),
-                    'email' => $email,
-                    'password' => Hash::make(Str::password(16)),
-                ]);
-            }
+            if ($existing && $existing->belongsToWorkspace($workspace)) {
+                // Only overwrite what the file actually specifies: a blank role
+                // or salary leaves the member's current value untouched.
+                $pivot = array_filter(['role' => $roleValue, 'salary' => $salary], fn ($v) => $v !== null);
 
-            $pivot = ['role' => $roleValue, 'salary' => $salary];
+                if (isset($pivot['role']) && $pivot['role'] !== Role::FullAdmin->value
+                    && $existing->roleIn($workspace) === Role::FullAdmin
+                    && $this->fullAdminCount($workspace) <= 1) {
+                    $errors[] = "Line {$line}: {$email} is the only Full Admin, so their role was kept.";
+                    unset($pivot['role']);
+                }
 
-            if ($user->belongsToWorkspace($workspace)) {
-                $workspace->users()->updateExistingPivot($user->id, $pivot);
+                if ($pivot !== []) {
+                    $workspace->users()->updateExistingPivot($existing->id, $pivot);
+                }
+                $user = $existing;
                 $updated++;
             } else {
-                $workspace->users()->attach($user->id, $pivot);
+                if ($this->usage->wouldExceedLimit($workspace)) {
+                    $errors[] = "Line {$line}: {$email} not added — your plan is limited to {$workspace->payeeLimit()} members.";
+                    $skipped++;
+
+                    continue;
+                }
+
+                if ($existing && ! $existing->hasVerifiedEmail()) {
+                    $errors[] = "Line {$line}: {$email} belongs to an account whose email is not verified yet — not added.";
+                    $skipped++;
+
+                    continue;
+                }
+
+                $user = $existing;
+                if (! $user) {
+                    $user = User::create([
+                        'name' => $name ?: Str::before($email, '@'),
+                        'email' => $email,
+                        'password' => Hash::make(Str::password(16)),
+                    ]);
+                    $user->sendEmailVerificationNotification();
+                }
+                $workspace->users()->attach($user->id, [
+                    'role' => $roleValue ?? Role::Participant->value,
+                    'salary' => $salary,
+                ]);
                 $created++;
             }
 
@@ -118,7 +152,8 @@ class MemberImportController extends Controller
         return '';
     }
 
-    protected function normaliseRole(string $raw): string
+    /** The role named in the file, or null when blank or unrecognised. */
+    protected function normaliseRole(string $raw): ?string
     {
         $raw = strtolower(trim(str_replace([' ', '-'], '_', $raw)));
 
@@ -128,7 +163,12 @@ class MemberImportController extends Controller
             }
         }
 
-        return Role::Participant->value;
+        return null;
+    }
+
+    protected function fullAdminCount(Workspace $workspace): int
+    {
+        return $workspace->users()->wherePivot('role', Role::FullAdmin->value)->count();
     }
 
     protected function authorizeFullAdmin(): void

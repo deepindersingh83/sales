@@ -65,6 +65,9 @@ class FormulaEvaluator
                 while ($i < $len && (ctype_digit($expr[$i]) || $expr[$i] === '.')) {
                     $num .= $expr[$i++];
                 }
+                if (! preg_match('/^(\d+\.?\d*|\.\d+)$/', $num)) {
+                    throw new InvalidArgumentException("Invalid number '{$num}' in formula.");
+                }
                 $tokens[] = ['type' => 'number', 'value' => $num];
                 $prevType = 'number';
 
@@ -134,8 +137,16 @@ class FormulaEvaluator
     {
         $output = [];
         $stack = [];
+        // One entry per open parenthesis: the argument count when it is a
+        // function call's parenthesis, null for a grouping parenthesis.
+        $arity = [];
+        $previous = null;
 
         foreach ($tokens as $token) {
+            if ($previous !== null && $previous['type'] === 'function' && $token['type'] !== 'lparen') {
+                throw new InvalidArgumentException("Function {$previous['value']}() needs parentheses.");
+            }
+
             switch ($token['type']) {
                 case 'number':
                 case 'variable':
@@ -145,9 +156,13 @@ class FormulaEvaluator
                     $stack[] = $token;
                     break;
                 case 'comma':
+                    if (! $arity || end($arity) === null) {
+                        throw new InvalidArgumentException('Commas are only allowed between function arguments.');
+                    }
                     while ($stack && end($stack)['type'] !== 'lparen') {
                         $output[] = array_pop($stack);
                     }
+                    $arity[array_key_last($arity)]++;
                     break;
                 case 'operator':
                     while ($stack && end($stack)['type'] === 'operator'
@@ -158,6 +173,7 @@ class FormulaEvaluator
                     break;
                 case 'lparen':
                     $stack[] = $token;
+                    $arity[] = ($previous !== null && $previous['type'] === 'function') ? 1 : null;
                     break;
                 case 'rparen':
                     while ($stack && end($stack)['type'] !== 'lparen') {
@@ -167,11 +183,19 @@ class FormulaEvaluator
                         throw new InvalidArgumentException('Mismatched parentheses.');
                     }
                     array_pop($stack); // discard lparen
-                    if ($stack && end($stack)['type'] === 'function') {
-                        $output[] = array_pop($stack);
+                    $args = array_pop($arity);
+                    if ($args !== null) {
+                        $function = array_pop($stack);
+                        $expected = self::FUNCTIONS[strtolower($function['value'])];
+                        if ($previous['type'] === 'lparen' || $args !== $expected) {
+                            throw new InvalidArgumentException("{$function['value']}() takes {$expected} arguments.");
+                        }
+                        $output[] = $function;
                     }
                     break;
             }
+
+            $previous = $token;
         }
 
         while ($stack) {
@@ -208,6 +232,9 @@ class FormulaEvaluator
                 case 'operator':
                     if ($token['value'] === 'u-') {
                         $a = array_pop($stack);
+                        if ($a === null) {
+                            throw new InvalidArgumentException('Malformed expression.');
+                        }
                         $stack[] = -$a;
                         break;
                     }
@@ -227,6 +254,9 @@ class FormulaEvaluator
                     $fn = strtolower($token['value']);
                     $b = array_pop($stack);
                     $a = array_pop($stack);
+                    if ($a === null || $b === null) {
+                        throw new InvalidArgumentException('Malformed expression.');
+                    }
                     $stack[] = $fn === 'min' ? min($a, $b) : max($a, $b);
                     break;
             }

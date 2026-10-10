@@ -4,12 +4,14 @@ namespace App\Http\Controllers\Admin;
 
 use App\Enums\Role;
 use App\Http\Controllers\Controller;
+use App\Models\Alias;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Services\Billing\UsageMeter;
 use App\Support\WorkspaceContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -65,10 +67,19 @@ class MemberController extends Controller
                 'email' => $data['email'],
                 'password' => Hash::make($tempPassword),
             ]);
+            $user->sendEmailVerificationNotification();
         }
 
         if ($user->belongsToWorkspace($workspace)) {
             return back()->withErrors(['email' => 'That person is already a member.']);
+        }
+
+        // Anyone can sign up with someone else's address; only an account whose
+        // owner has proved they control the inbox may be granted access.
+        if (! $tempPassword && ! $user->hasVerifiedEmail()) {
+            return back()->withErrors([
+                'email' => 'An account with this email exists but its email address has not been verified. Ask them to verify it (or reset their password), then add them again.',
+            ]);
         }
 
         $workspace->users()->attach($user->id, ['role' => $data['role']]);
@@ -121,7 +132,17 @@ class MemberController extends Controller
             return back()->withErrors(['role' => 'A workspace must keep at least one Full Admin.']);
         }
 
-        $workspace->users()->detach($member->id);
+        // A removed member must stop earning: their aliases would keep crediting
+        // deals to them, and reports pointing at them would keep paying them
+        // manager overrides on every new run.
+        DB::transaction(function () use ($workspace, $member) {
+            Alias::where('user_id', $member->id)->delete();
+            DB::table('workspace_user')
+                ->where('workspace_id', $workspace->id)
+                ->where('manager_id', $member->id)
+                ->update(['manager_id' => null]);
+            $workspace->users()->detach($member->id);
+        });
 
         return redirect()->route('admin.members.index')->with('status', 'Member removed.');
     }

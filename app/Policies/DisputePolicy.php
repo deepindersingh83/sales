@@ -2,6 +2,7 @@
 
 namespace App\Policies;
 
+use App\Enums\DisputeStatus;
 use App\Models\Dispute;
 use App\Models\User;
 
@@ -56,9 +57,15 @@ class DisputePolicy
         return ($user->currentRole()?->canWrite() ?? false) && $this->view($user, $dispute);
     }
 
-    /** Resolving is a writing admin action. */
+    /**
+     * Resolving is a writing admin action on someone else's open dispute: an
+     * admin never closes their own claim, and a resolution is final.
+     */
     public function resolve(User $user, Dispute $dispute): bool
     {
-        return ($user->currentRole()?->canWrite() ?? false) && $this->view($user, $dispute);
+        return ($user->currentRole()?->canWrite() ?? false)
+            && $dispute->user_id !== $user->id
+            && $dispute->status !== DisputeStatus::Resolved
+            && $this->view($user, $dispute);
     }
 }

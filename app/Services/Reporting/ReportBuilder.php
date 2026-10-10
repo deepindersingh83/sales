@@ -5,15 +5,86 @@ namespace App\Services\Reporting;
 use App\Enums\PayoutStatus;
 use App\Enums\RewardType;
 use App\Models\Credit;
+use App\Models\Plan;
 use App\Models\Reward;
+use App\Models\Transaction;
+use App\Services\Calculation\FxConverter;
+use App\Support\WorkspaceContext;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 
 /**
- * Aggregations for the built-in MVP reports. All figures are on RELEASED data
- * (final payouts/credits), matching what reps and finance actually see.
+ * Aggregations for the built-in reports. All figures are on RELEASED data
+ * (final payouts/credits), matching what reps and finance actually see, and
+ * cross-plan totals are converted into the workspace base currency.
  */
 class ReportBuilder
 {
+    /** Built-in crediting dimensions (the rest come from transaction raw_data). */
+    public const CREDITING_DIMENSIONS = [
+        'rep' => 'Sales rep',
+        'plan' => 'Plan',
+        'month' => 'Month',
+        'source' => 'Data source',
+    ];
+
+    /** Quota-attainment bands for the distribution report, [label, from%, to%). */
+    public const ATTAINMENT_BANDS = [
+        ['< 50%', PHP_INT_MIN, 50],
+        ['50–75%', 50, 75],
+        ['75–100%', 75, 100],
+        ['100–125%', 100, 125],
+        ['≥ 125%', 125, PHP_INT_MAX],
+    ];
+
+    public function __construct(
+        protected WorkspaceContext $context,
+        protected ReportScope $scope,
+        protected FxConverter $fx,
+    ) {}
+
+    public function baseCurrency(): string
+    {
+        return $this->context->get()?->base_currency ?: 'USD';
+    }
+
+    /**
+     * Sum an amount column across rows that may be in different currencies,
+     * converting each into the workspace base currency at its own date.
+     *
+     * @param  Collection<int, Credit|Reward>  $rows
+     */
+    protected function money(Collection $rows, string $field): float
+    {
+        $base = $this->baseCurrency();
+        $this->fx->forWorkspace((int) $this->context->id());
+
+        return (float) $rows->sum(fn (Credit|Reward $row) => $this->fx->convert(
+            (float) $row->{$field},
+            $row->currency ?: $base,
+            $base,
+            $row->created_at?->toDateString(),
+        ));
+    }
+
+    /** Released rewards on plans the viewer may see. */
+    protected function releasedRewards(): Builder
+    {
+        return $this->scope->rewards(Reward::released());
+    }
+
+    /** Released credits on plans the viewer may see. */
+    protected function releasedCredits(): Builder
+    {
+        return $this->scope->credits(Credit::released());
+    }
+
+    /** Earned-but-unreleased rewards (liability) on plans the viewer may see. */
+    protected function accruedRewards(): Builder
+    {
+        return $this->scope->rewards(Reward::whereIn('status', [PayoutStatus::Pending, PayoutStatus::Reviewed]));
+    }
+
     /**
      * Total released payout per user.
      *
@@ -21,14 +92,14 @@ class ReportBuilder
      */
     public function payoutByUser(): Collection
     {
-        return Reward::released()
+        return $this->releasedRewards()
             ->with('user')
             ->get()
             ->groupBy('user_id')
             ->map(fn ($rows) => [
                 'user' => $rows->first()->user?->name ?? 'Unknown',
-                'total' => round((float) $rows->sum('computed_amount'), 2),
-                'currency' => $rows->first()->currency,
+                'total' => round($this->money($rows, 'computed_amount'), 2),
+                'currency' => $this->baseCurrency(),
             ])
             ->sortByDesc('total')
             ->values();
@@ -41,14 +112,14 @@ class ReportBuilder
      */
     public function payoutByPlan(): Collection
     {
-        return Reward::released()
+        return $this->releasedRewards()
             ->with('plan')
             ->get()
             ->groupBy('plan_id')
             ->map(fn ($rows) => [
                 'plan' => $rows->first()->plan?->name ?? 'Unknown',
-                'total' => round((float) $rows->sum('computed_amount'), 2),
-                'currency' => $rows->first()->currency,
+                'total' => round($this->money($rows, 'computed_amount'), 2),
+                'currency' => $this->baseCurrency(),
             ])
             ->sortByDesc('total')
             ->values();
@@ -62,13 +133,13 @@ class ReportBuilder
      */
     public function creditingByField(string $field): Collection
     {
-        return Credit::released()
+        return $this->releasedCredits()
             ->with('transaction')
             ->get()
             ->groupBy(fn (Credit $c) => (string) data_get($c->transaction?->raw_data, $field, '—'))
             ->map(fn ($rows, $key) => [
                 'key' => $key === '' ? '—' : $key,
-                'total' => round((float) $rows->sum('credited_amount'), 2),
+                'total' => round($this->money($rows, 'credited_amount'), 2),
                 'count' => $rows->count(),
             ])
             ->sortByDesc('total')
@@ -83,7 +154,7 @@ class ReportBuilder
      */
     public function creditingFieldOptions(): array
     {
-        $keys = Credit::released()
+        $keys = $this->releasedCredits()
             ->with('transaction')
             ->get()
             ->flatMap(fn (Credit $c) => array_keys($c->transaction?->raw_data ?? []))
@@ -91,7 +162,58 @@ class ReportBuilder
             ->values()
             ->all();
 
-        return $keys ?: ['product'];
+        $keys = array_values(array_diff($keys ?: ['product'], array_keys(self::CREDITING_DIMENSIONS)));
+
+        return array_merge(array_keys(self::CREDITING_DIMENSIONS), $keys);
+    }
+
+    /**
+     * Released credited amount grouped by a built-in dimension (rep, plan,
+     * month, source) or, failing that, by a transaction raw_data field.
+     *
+     * @return Collection<int, array{key:string, total:float, count:int}>
+     */
+    public function creditingBy(string $dimension): Collection
+    {
+        if (! array_key_exists($dimension, self::CREDITING_DIMENSIONS)) {
+            return $this->creditingByField($dimension);
+        }
+
+        $key = match ($dimension) {
+            'rep' => fn (Credit $c) => $c->user?->name ?? 'Unknown',
+            'plan' => fn (Credit $c) => $c->calcRun?->plan?->name ?? 'Unknown',
+            'month' => fn (Credit $c) => ($c->transaction?->transaction_date ?? $c->created_at)->format('Y-m'),
+            'source' => fn (Credit $c) => $c->transaction?->source_system ?? '—',
+        };
+
+        $rows = $this->releasedCredits()
+            ->with(['user:id,name', 'calcRun.plan:id,name', 'transaction'])
+            ->get()
+            ->groupBy($key)
+            ->map(fn ($rows, $k) => [
+                'key' => (string) $k,
+                'total' => round($this->money($rows, 'credited_amount'), 2),
+                'count' => $rows->count(),
+            ]);
+
+        return $dimension === 'month'
+            ? $rows->sortBy('key')->values()
+            : $rows->sortByDesc('total')->values();
+    }
+
+    /**
+     * Included transactions that no calculation run has credited to anyone —
+     * usually a missing alias. The crediting "exceptions" list.
+     *
+     * @return Collection<int, Transaction>
+     */
+    public function uncreditedTransactions(): Collection
+    {
+        return Transaction::query()
+            ->where('excluded', false)
+            ->whereNotIn('id', Credit::query()->select('transaction_id'))
+            ->orderByDesc('transaction_date')
+            ->get();
     }
 
     /**
@@ -101,18 +223,131 @@ class ReportBuilder
      */
     public function attainmentByUser(): Collection
     {
-        $payouts = Reward::released()->get()->groupBy('user_id')
-            ->map(fn ($r) => (float) $r->sum('computed_amount'));
+        $payouts = $this->releasedRewards()->get()->groupBy('user_id')
+            ->map(fn ($r) => $this->money($r, 'computed_amount'));
 
-        return Credit::released()->with('user')->get()
+        return $this->releasedCredits()->with('user')->get()
             ->groupBy('user_id')
             ->map(fn ($rows, $userId) => [
                 'user' => $rows->first()->user?->name ?? 'Unknown',
-                'credited' => round((float) $rows->sum('credited_amount'), 2),
+                'credited' => round($this->money($rows, 'credited_amount'), 2),
                 'payout' => round((float) ($payouts[$userId] ?? 0), 2),
             ])
             ->sortByDesc('credited')
             ->values();
+    }
+
+    /**
+     * Quota attainment per rep per plan: released credited amount from that
+     * plan's runs against the plan quota. Plans without a quota are skipped.
+     *
+     * Amounts stay in the plan's own currency, which is the currency of its quota.
+     *
+     * @return Collection<int, array{user_id:int, user:string, plan_id:int, plan:string, credited:float, quota:float, attainment:float}>
+     */
+    public function quotaAttainment(): Collection
+    {
+        $plans = Plan::whereNotNull('quota')->where('quota', '>', 0)->get()->keyBy('id');
+
+        return $this->releasedCredits()
+            ->with(['user:id,name', 'calcRun:id,plan_id'])
+            ->get()
+            ->filter(fn (Credit $c) => $plans->has($c->calcRun?->plan_id))
+            ->groupBy(fn (Credit $c) => $c->user_id.'|'.$c->calcRun->plan_id)
+            ->map(function ($rows) use ($plans) {
+                $plan = $plans[$rows->first()->calcRun->plan_id];
+                $credited = (float) $rows->sum('credited_amount');
+
+                return [
+                    'user_id' => (int) $rows->first()->user_id,
+                    'user' => $rows->first()->user?->name ?? 'Unknown',
+                    'plan_id' => $plan->id,
+                    'plan' => $plan->name,
+                    'credited' => round($credited, 2),
+                    'quota' => round((float) $plan->quota, 2),
+                    'attainment' => round($credited / (float) $plan->quota * 100, 1),
+                ];
+            })
+            ->sortByDesc('attainment')
+            ->values();
+    }
+
+    /**
+     * Attainment rolled up per plan: participants, total credited, payout and
+     * average quota attainment.
+     *
+     * @return Collection<int, array{plan:string, reps:int, credited:float, payout:float, avg_attainment:?float}>
+     */
+    public function attainmentByPlan(): Collection
+    {
+        $quota = $this->quotaAttainment()->groupBy('plan_id');
+        $payouts = $this->releasedRewards()->get()->groupBy('plan_id')
+            ->map(fn ($r) => $this->money($r, 'computed_amount'));
+
+        return $this->releasedCredits()
+            ->with('calcRun.plan:id,name')
+            ->get()
+            ->groupBy(fn (Credit $c) => $c->calcRun?->plan_id)
+            ->map(function ($rows, $planId) use ($quota, $payouts) {
+                $name = $rows->first()->calcRun?->plan?->name ?? 'Unknown';
+
+                return [
+                    'plan' => $name,
+                    'reps' => $rows->pluck('user_id')->unique()->count(),
+                    'credited' => round($this->money($rows, 'credited_amount'), 2),
+                    'payout' => round((float) ($payouts[$planId] ?? 0), 2),
+                    'avg_attainment' => isset($quota[$planId]) ? round($quota[$planId]->avg('attainment'), 1) : null,
+                ];
+            })
+            ->sortByDesc('credited')
+            ->values();
+    }
+
+    /**
+     * Team attainment: each manager's direct reports' released credits and
+     * payout (single-level reporting lines, as configured on members).
+     *
+     * @return Collection<int, array{manager:string, reps:int, credited:float, payout:float}>
+     */
+    public function attainmentByManager(): Collection
+    {
+        $workspace = $this->context->get();
+        if (! $workspace) {
+            return collect();
+        }
+
+        $members = $workspace->users()->get();
+        $names = $members->pluck('name', 'id');
+        $managerOf = $members->mapWithKeys(fn ($u) => [$u->id => $u->pivot->manager_id]);
+
+        $credited = $this->releasedCredits()->get()->groupBy('user_id')->map(fn ($r) => $this->money($r, 'credited_amount'));
+        $paid = $this->releasedRewards()->get()->groupBy('user_id')->map(fn ($r) => $this->money($r, 'computed_amount'));
+
+        return $managerOf->filter()
+            ->groupBy(fn ($managerId) => $managerId, preserveKeys: true)
+            ->map(fn ($reports, $managerId) => [
+                'manager' => $names[$managerId] ?? 'Unknown',
+                'reps' => $reports->count(),
+                'credited' => round($reports->keys()->sum(fn ($id) => $credited[$id] ?? 0), 2),
+                'payout' => round($reports->keys()->sum(fn ($id) => $paid[$id] ?? 0), 2),
+            ])
+            ->sortByDesc('credited')
+            ->values();
+    }
+
+    /**
+     * How many rep/plan pairs fall in each quota-attainment band.
+     *
+     * @return Collection<int, array{band:string, count:int}>
+     */
+    public function attainmentDistribution(): Collection
+    {
+        $rows = $this->quotaAttainment();
+
+        return collect(self::ATTAINMENT_BANDS)->map(fn (array $band) => [
+            'band' => $band[0],
+            'count' => $rows->filter(fn ($r) => $r['attainment'] >= $band[1] && $r['attainment'] < $band[2])->count(),
+        ]);
     }
 
     /**
@@ -122,11 +357,11 @@ class ReportBuilder
      */
     public function payoutByType(): Collection
     {
-        return Reward::released()->whereNotNull('computed_amount')->get()
+        return $this->releasedRewards()->whereNotNull('computed_amount')->get()
             ->groupBy(fn (Reward $r) => $r->reward_type->value)
             ->map(fn ($rows, $type) => [
                 'type' => RewardType::from($type)->label(),
-                'total' => round((float) $rows->sum('computed_amount'), 2),
+                'total' => round($this->money($rows, 'computed_amount'), 2),
             ])
             ->sortByDesc('total')
             ->values();
@@ -139,11 +374,11 @@ class ReportBuilder
      */
     public function payoutByMonth(): Collection
     {
-        return Reward::released()->whereNotNull('computed_amount')->get()
+        return $this->releasedRewards()->whereNotNull('computed_amount')->get()
             ->groupBy(fn (Reward $r) => $r->created_at->format('Y-m'))
             ->map(fn ($rows, $month) => [
                 'month' => $month,
-                'total' => round((float) $rows->sum('computed_amount'), 2),
+                'total' => round($this->money($rows, 'computed_amount'), 2),
             ])
             ->sortBy('month')
             ->values();
@@ -157,14 +392,14 @@ class ReportBuilder
      */
     public function liabilityByUser(): Collection
     {
-        return Reward::whereIn('status', [PayoutStatus::Pending, PayoutStatus::Reviewed])
+        return $this->accruedRewards()
             ->whereNotNull('computed_amount')
             ->with('user')
             ->get()
             ->groupBy('user_id')
             ->map(fn ($rows) => [
                 'user' => $rows->first()->user?->name ?? 'Unknown',
-                'liability' => round((float) $rows->sum('computed_amount'), 2),
+                'liability' => round($this->money($rows, 'computed_amount'), 2),
             ])
             ->sortByDesc('liability')
             ->values();
@@ -172,18 +407,16 @@ class ReportBuilder
 
     public function totalLiability(): float
     {
-        return round((float) Reward::whereIn('status', [PayoutStatus::Pending, PayoutStatus::Reviewed])
-            ->sum('computed_amount'), 2);
+        return round($this->money($this->accruedRewards()->get(), 'computed_amount'), 2);
     }
 
     public function totalReleasedPayout(): float
     {
-        return round((float) Reward::released()->sum('computed_amount'), 2);
+        return round($this->money($this->releasedRewards()->get(), 'computed_amount'), 2);
     }
 
     public function hasReleasedData(): bool
     {
-        return Credit::where('status', PayoutStatus::Released)->exists()
-            || Reward::where('status', PayoutStatus::Released)->exists();
+        return $this->releasedCredits()->exists() || $this->releasedRewards()->exists();
     }
 }
