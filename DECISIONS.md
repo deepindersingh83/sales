@@ -74,12 +74,11 @@ running `DECISIONS.md`.
   brand name and colour, not the logo.
 - **D14 — Activity log (audit trail).** Controllers call `App\Services\ActivityLogger` explicitly
   after an admin action succeeds (plans, plan access, calc runs, releases, adjustments, members,
-  aliases, settings, API token, FX, billing, transactions, disputes). The logger drops any
-  property whose key looks like a credential (password/secret/token/credential/api key), works
-  with no signed-in user (console: `user_id` null), and records salary changes as "changed"
-  without the figures. The Xero controllers are maintained separately, so Xero actions are
-  audited by the `RecordRouteActivity` web middleware from a fixed route-name map: it logs only
-  successful requests (a flashed `status`, no flashed `errors`) and only allow-listed input.
+  aliases, settings, API token, FX, billing, transactions, disputes, customers, and Xero: app
+  keys saved/removed, connected, schedule changed, full resync, disconnected). The logger drops
+  any property whose key looks like a credential (password/secret/token/credential/api key),
+  works with no signed-in user (console: `user_id` null), and records salary changes as
+  "changed" without the figures.
   **Who can view:** Full Admins and Limited Admins (read-only oversight). Plan Admins cannot —
   most entries are workspace-wide, not per plan. Limited Admins do not see entries whose subject
   is a plan hidden from them or a calc run of such a plan.

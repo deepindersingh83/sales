@@ -4,6 +4,7 @@ namespace Tests\Feature\Admin;
 
 use App\Actions\StartCalcRun;
 use App\Enums\Role;
+use App\Models\ActivityLog;
 use App\Models\Alias;
 use App\Models\Credit;
 use App\Models\Customer;
@@ -63,6 +64,7 @@ class CustomerListTest extends TestCase
         $alias = Alias::sole();
         $this->assertSame(['contact_id', 'C-ACME', $alice->id], [$alias->match_field, $alias->alias_value, $alias->user_id]);
         $this->assertSame(['enterprise', 'nsw'], $acme->fresh()->tags->pluck('name')->sort()->values()->all());
+        $this->assertSame('Alice', ActivityLog::where('action', 'customer.updated')->sole()->properties['rep']);
         $run = app(StartCalcRun::class)->handle($plan);
         $this->assertSame($alice->id, Credit::where('calc_run_id', $run->id)->sole()->user_id);
 

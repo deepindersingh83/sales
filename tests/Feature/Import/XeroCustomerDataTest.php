@@ -3,6 +3,7 @@
 namespace Tests\Feature\Import;
 
 use App\Enums\Role;
+use App\Models\ActivityLog;
 use App\Models\Customer;
 use App\Models\ImportSource;
 use App\Models\Transaction;
@@ -167,6 +168,7 @@ class XeroCustomerDataTest extends TestCase
 
         Http::assertNotSent(fn (Request $r) => $r->hasHeader('If-Modified-Since'));
         $this->assertSame(1, Transaction::count());
+        $this->assertSame(1, ActivityLog::where('action', 'xero.full_resync')->where('subject_id', $source->id)->count());
     }
 
     public function test_customer_balances_age_outstanding_amounts_and_net_credit_notes(): void

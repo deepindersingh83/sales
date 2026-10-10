@@ -9,6 +9,7 @@ use App\Models\Tag;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Models\Workspace;
+use App\Services\ActivityLogger;
 use App\Support\WorkspaceContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -70,6 +71,12 @@ class CustomerController extends Controller
             $this->syncOwnerAlias($customer, $data['owner_user_id'] ?? null);
             $customer->syncTagNames(explode(',', (string) ($data['tags'] ?? '')));
         });
+
+        $customer->load('owner:id,name', 'tags');
+        app(ActivityLogger::class)->log('customer.updated', "Updated customer {$customer->name}.", $customer, [
+            'rep' => $customer->owner?->name,
+            'tags' => $customer->tags->pluck('name')->all(),
+        ]);
 
         return back()->with('status', "Updated {$customer->name}.");
     }

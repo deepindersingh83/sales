@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Models\ImportSource;
 use App\Models\IntegrationSetting;
 use App\Models\Transaction;
+use App\Services\ActivityLogger;
 use App\Services\Connectors\Xero\XeroClient;
 use App\Services\Connectors\Xero\XeroDriver;
 use App\Services\Import\ScheduledImportRunner;
@@ -27,6 +28,7 @@ class XeroSettingsController extends Controller
     public function __construct(
         protected XeroClient $client,
         protected XeroDriver $driver,
+        protected ActivityLogger $logger,
     ) {}
 
     public function show(Request $request): View
@@ -70,6 +72,8 @@ class XeroSettingsController extends Controller
             'scopes' => trim((string) ($data['scopes'] ?? '')) ?: null,
         ]]);
 
+        $this->logger->log('xero.app_keys_saved', 'Xero app keys saved.');
+
         return redirect()->route('admin.connectors.xero.show')->with('status', 'Xero app keys saved.');
     }
 
@@ -79,6 +83,7 @@ class XeroSettingsController extends Controller
         $this->authorizeFullAdmin($request);
 
         IntegrationSetting::where('provider', 'xero')->delete();
+        $this->logger->log('xero.app_keys_removed', 'Saved Xero app keys removed.');
 
         return redirect()->route('admin.connectors.xero.show')->with('status', 'Saved Xero app keys removed.');
     }
@@ -112,6 +117,9 @@ class XeroSettingsController extends Controller
         $source->next_run_at = $schedule ? $source->computeNextRunAt(now()) : null;
         $source->save();
 
+        $this->logger->log('xero.schedule_changed', "{$source->name} now syncs ".($schedule ?? 'manually only').'.',
+            $source, ['schedule' => $data['schedule']]);
+
         return redirect()->route('admin.connectors.xero.show')
             ->with('status', "{$source->name} now syncs ".($schedule ?? 'manually only').'.');
     }
@@ -134,6 +142,9 @@ class XeroSettingsController extends Controller
             return redirect()->route('admin.connectors.xero.show')->with('check_error', "{$source->name}: full resync failed — {$e->getMessage()}");
         }
 
+        $this->logger->log('xero.full_resync', "Full resync of {$source->name}: {$result['created']} new, {$result['updated']} updated.",
+            $source, $result);
+
         return redirect()->route('admin.connectors.xero.show')->with('status',
             "Full resync of {$source->name}: {$result['created']} new, {$result['updated']} updated.");
     }
@@ -144,6 +155,7 @@ class XeroSettingsController extends Controller
         $this->authorizeSource($source);
 
         $this->driver->revoke($source);
+        $this->logger->log('xero.disconnected', "Disconnected {$source->name}.", $source);
         $source->delete();
 
         return redirect()->route('admin.connectors.xero.show')
