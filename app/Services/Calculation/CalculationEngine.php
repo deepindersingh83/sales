@@ -565,7 +565,8 @@ class CalculationEngine
 
     /**
      * Transactions in scope for this run: within the plan period when the
-     * snapshot defines one, otherwise all workspace transactions.
+     * snapshot defines one (by paid date for pay-when-paid plans), otherwise
+     * all workspace transactions.
      *
      * @return LazyCollection<int, Transaction>
      */
@@ -592,8 +593,19 @@ class CalculationEngine
         }
 
         if ($start && $end) {
-            $query->whereNotNull('transaction_date')
-                ->whereBetween('transaction_date', [$start, $end]);
+            if (! empty($snapshot['plan']['pay_when_paid'])) {
+                // Pay-when-paid: a deal belongs to the period its cash arrived
+                // (paid_at, e.g. Xero FullyPaidOnDate), falling back to the
+                // transaction date when the source doesn't report one.
+                $query->where(fn ($q) => $q
+                    ->whereBetween('paid_at', [$start, $end])
+                    ->orWhere(fn ($q) => $q->whereNull('paid_at')
+                        ->whereNotNull('transaction_date')
+                        ->whereBetween('transaction_date', [$start, $end])));
+            } else {
+                $query->whereNotNull('transaction_date')
+                    ->whereBetween('transaction_date', [$start, $end]);
+            }
         }
 
         // Per-plan transaction filter on a raw_data field (best-effort JSON match).
