@@ -6,6 +6,7 @@ use App\Enums\Role;
 use App\Http\Controllers\Controller;
 use App\Models\Plan;
 use App\Models\Workspace;
+use App\Services\ActivityLogger;
 use App\Support\WorkspaceContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -33,7 +34,7 @@ class PlanAccessController extends Controller
         ]);
     }
 
-    public function update(Request $request, Plan $plan): RedirectResponse
+    public function update(Request $request, Plan $plan, ActivityLogger $logger): RedirectResponse
     {
         Gate::authorize('manageAccess', $plan);
 
@@ -49,10 +50,29 @@ class PlanAccessController extends Controller
         $planAdminIds = $members->filter(fn ($m) => $m->pivot->role === Role::PlanAdmin->value)->pluck('id');
         $limitedIds = $members->filter(fn ($m) => $m->pivot->role === Role::LimitedAdmin->value)->pluck('id');
 
+        $before = $this->accessState($plan);
+
         $plan->assignedAdmins()->sync($planAdminIds->intersect($data['plan_admin_ids'] ?? [])->all());
         $plan->hiddenFromUsers()->sync($limitedIds->intersect($data['hidden_user_ids'] ?? [])->all());
 
+        $logger->log('plan.access_changed', "Changed access to plan {$plan->name}.", $plan, [
+            'changes' => ActivityLogger::changes($before, $this->accessState($plan)),
+        ]);
+
         return redirect()->route('admin.plans.show', $plan)->with('status', 'Plan access updated.');
+    }
+
+    /**
+     * Assigned plan admins and hidden-from users, as sorted id lists.
+     *
+     * @return array{plan_admin_ids: array<int, int>, hidden_user_ids: array<int, int>}
+     */
+    protected function accessState(Plan $plan): array
+    {
+        return [
+            'plan_admin_ids' => $plan->assignedAdmins()->pluck('users.id')->sort()->values()->all(),
+            'hidden_user_ids' => $plan->hiddenFromUsers()->pluck('users.id')->sort()->values()->all(),
+        ];
     }
 
     protected function workspace(): Workspace

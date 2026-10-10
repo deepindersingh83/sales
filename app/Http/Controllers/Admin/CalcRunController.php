@@ -8,6 +8,7 @@ use App\Enums\CalcRunStatus;
 use App\Http\Controllers\Controller;
 use App\Models\CalcRun;
 use App\Models\Plan;
+use App\Services\ActivityLogger;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Gate;
@@ -29,11 +30,16 @@ class CalcRunController extends Controller
     }
 
     /** Trigger a calc run for a plan (queued). */
-    public function store(Plan $plan, StartCalcRun $starter): RedirectResponse
+    public function store(Plan $plan, StartCalcRun $starter, ActivityLogger $logger): RedirectResponse
     {
         Gate::authorize('createForPlan', [CalcRun::class, $plan]);
 
         $run = $starter->handle($plan, request()->user()->id);
+
+        $logger->log('calc_run.started', "Started calculation run #{$run->id} for plan {$plan->name}.", $run, [
+            'plan_id' => $plan->id,
+            'plan_version_id' => $run->plan_version_id,
+        ]);
 
         return redirect()
             ->route('admin.calc-runs.show', $run)
@@ -41,7 +47,7 @@ class CalcRunController extends Controller
     }
 
     /** Approve a completed run so its rewards may be released. */
-    public function approve(CalcRun $calcRun): RedirectResponse
+    public function approve(CalcRun $calcRun, ActivityLogger $logger): RedirectResponse
     {
         Gate::authorize('release', $calcRun);
 
@@ -58,15 +64,24 @@ class CalcRunController extends Controller
             'approved_by_user_id' => request()->user()->id,
         ]);
 
+        $logger->log('calc_run.approved', "Approved calculation run #{$calcRun->id}.", $calcRun, [
+            'plan_id' => $calcRun->plan_id,
+        ]);
+
         return back()->with('status', 'Run approved — rewards can now be released.');
     }
 
     /** Trigger a true-up run — pays the delta vs already-released commission. */
-    public function trueUp(Plan $plan, StartCalcRun $starter): RedirectResponse
+    public function trueUp(Plan $plan, StartCalcRun $starter, ActivityLogger $logger): RedirectResponse
     {
         Gate::authorize('createForPlan', [CalcRun::class, $plan]);
 
         $run = $starter->handle($plan, request()->user()->id, false, 'true_up');
+
+        $logger->log('calc_run.true_up', "Started true-up run #{$run->id} for plan {$plan->name}.", $run, [
+            'plan_id' => $plan->id,
+            'plan_version_id' => $run->plan_version_id,
+        ]);
 
         return redirect()
             ->route('admin.calc-runs.show', $run)
@@ -74,11 +89,15 @@ class CalcRunController extends Controller
     }
 
     /** Projected payouts without persisting anything (what-if). */
-    public function simulate(Plan $plan, SimulateCalc $simulator): View
+    public function simulate(Plan $plan, SimulateCalc $simulator, ActivityLogger $logger): View
     {
         Gate::authorize('createForPlan', [CalcRun::class, $plan]);
 
         $result = $simulator->handle($plan, request()->user()->id);
+
+        $logger->log('calc_run.simulated', "Simulated plan {$plan->name}.", $plan, [
+            'commission_total' => $result['summary']['commission_total'] ?? null,
+        ]);
 
         return view('admin.calc_runs.simulation', [
             'plan' => $plan,

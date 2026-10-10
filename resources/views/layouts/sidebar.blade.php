@@ -109,6 +109,7 @@
             <x-ui.nav-item :href="route('admin.fx.index')" :active="request()->routeIs('admin.fx.*')" :icon="$ico['report']">FX rates</x-ui.nav-item>
             <x-ui.nav-item :href="route('admin.billing.index')" :active="request()->routeIs('admin.billing.*')" :icon="$ico['calc']">Billing</x-ui.nav-item>
             <x-ui.nav-item :href="route('admin.settings.edit')" :active="request()->routeIs('admin.settings.*')" :icon="$ico['calc']">Settings</x-ui.nav-item>
+            <x-ui.nav-item :href="route('admin.activity.index')" :active="request()->routeIs('admin.activity.*')" :icon="$ico['report']">Activity log</x-ui.nav-item>
         @endif
     @else
         <x-ui.nav-item :href="route('my.team')" :active="request()->routeIs('my.team')" :icon="$ico['team']">My team</x-ui.nav-item>

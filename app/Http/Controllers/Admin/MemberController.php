@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Alias;
 use App\Models\User;
 use App\Models\Workspace;
+use App\Services\ActivityLogger;
 use App\Services\Billing\UsageMeter;
 use App\Support\WorkspaceContext;
 use Illuminate\Http\RedirectResponse;
@@ -35,7 +36,7 @@ class MemberController extends Controller
         ]);
     }
 
-    public function store(Request $request): RedirectResponse
+    public function store(Request $request, ActivityLogger $logger): RedirectResponse
     {
         $this->authorizeFullAdmin();
         $workspace = $this->workspace();
@@ -84,6 +85,11 @@ class MemberController extends Controller
 
         $workspace->users()->attach($user->id, ['role' => $data['role']]);
 
+        $logger->log('member.added', "Added {$user->email} as ".Role::from($data['role'])->label().'.', $user, [
+            'role' => $data['role'],
+            'new_account' => $tempPassword !== null,
+        ]);
+
         $flash = $tempPassword
             ? "Member added. Temporary password for {$user->email}: {$tempPassword} (share securely — shown once)."
             : 'Existing user added to the workspace.';
@@ -91,7 +97,7 @@ class MemberController extends Controller
         return redirect()->route('admin.members.index')->with('status', $flash);
     }
 
-    public function update(Request $request, User $member): RedirectResponse
+    public function update(Request $request, User $member, ActivityLogger $logger): RedirectResponse
     {
         $this->authorizeFullAdmin();
         $workspace = $this->workspace();
@@ -112,16 +118,36 @@ class MemberController extends Controller
             return back()->withErrors(['role' => 'A workspace must keep at least one Full Admin.']);
         }
 
+        $before = $this->membershipState($workspace, $member);
+
         $workspace->users()->updateExistingPivot($member->id, [
             'role' => $data['role'],
             'manager_id' => $data['manager_id'] ?? null,
             'salary' => $data['salary'] ?? null,
         ]);
 
+        $changes = ActivityLogger::changes($before, $this->membershipState($workspace, $member));
+
+        // Salary is compensation data: record that it changed, not the figures.
+        if (isset($changes['salary'])) {
+            $changes['salary'] = ['changed' => true];
+        }
+
+        if ($changes !== []) {
+            $logger->log(
+                isset($changes['role']) ? 'member.role_changed' : 'member.updated',
+                isset($changes['role'])
+                    ? "Changed {$member->email}'s role from ".Role::from($changes['role']['old'])->label().' to '.Role::from($changes['role']['new'])->label().'.'
+                    : "Updated {$member->email}'s membership.",
+                $member,
+                ['changes' => $changes],
+            );
+        }
+
         return redirect()->route('admin.members.index')->with('status', 'Member updated.');
     }
 
-    public function destroy(User $member): RedirectResponse
+    public function destroy(User $member, ActivityLogger $logger): RedirectResponse
     {
         $this->authorizeFullAdmin();
         $workspace = $this->workspace();
@@ -144,6 +170,8 @@ class MemberController extends Controller
             $workspace->users()->detach($member->id);
         });
 
+        $logger->log('member.removed', "Removed {$member->email} from the workspace.", $member);
+
         return redirect()->route('admin.members.index')->with('status', 'Member removed.');
     }
 
@@ -155,6 +183,25 @@ class MemberController extends Controller
     protected function workspace(): Workspace
     {
         return Workspace::withoutGlobalScopes()->findOrFail(app(WorkspaceContext::class)->id());
+    }
+
+    /**
+     * The member's role, manager and salary in this workspace.
+     *
+     * @return array{role: string|null, manager_id: int|null, salary: string|null}
+     */
+    protected function membershipState(Workspace $workspace, User $member): array
+    {
+        $pivot = DB::table('workspace_user')
+            ->where('workspace_id', $workspace->id)
+            ->where('user_id', $member->id)
+            ->first(['role', 'manager_id', 'salary']);
+
+        return [
+            'role' => $pivot?->role,
+            'manager_id' => $pivot?->manager_id !== null ? (int) $pivot->manager_id : null,
+            'salary' => $pivot?->salary !== null ? (string) $pivot->salary : null,
+        ];
     }
 
     protected function fullAdminCount(Workspace $workspace): int

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Transaction;
+use App\Services\ActivityLogger;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -55,18 +56,32 @@ class TransactionController extends Controller
         ]);
     }
 
-    public function toggleExclude(Transaction $transaction): RedirectResponse
+    public function toggleExclude(Transaction $transaction, ActivityLogger $logger): RedirectResponse
     {
         Gate::authorize('update', $transaction);
         $transaction->update(['excluded' => ! $transaction->excluded]);
 
+        $logger->log(
+            $transaction->excluded ? 'transaction.excluded' : 'transaction.included',
+            ($transaction->excluded ? 'Excluded' : 'Re-included')." transaction {$transaction->reference()}.",
+            $transaction,
+            ['changes' => ['excluded' => ['old' => ! $transaction->excluded, 'new' => $transaction->excluded]]],
+        );
+
         return back()->with('status', $transaction->excluded ? 'Transaction excluded.' : 'Transaction re-included.');
     }
 
-    public function togglePaid(Transaction $transaction): RedirectResponse
+    public function togglePaid(Transaction $transaction, ActivityLogger $logger): RedirectResponse
     {
         Gate::authorize('update', $transaction);
         $transaction->update(['is_paid' => ! $transaction->is_paid]);
+
+        $logger->log(
+            $transaction->is_paid ? 'transaction.marked_paid' : 'transaction.marked_unpaid',
+            'Marked transaction '.$transaction->reference().($transaction->is_paid ? ' paid.' : ' unpaid.'),
+            $transaction,
+            ['changes' => ['is_paid' => ['old' => ! $transaction->is_paid, 'new' => $transaction->is_paid]]],
+        );
 
         return back()->with('status', 'Payment status updated.');
     }

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Enums\Role;
 use App\Http\Controllers\Controller;
 use App\Models\Workspace;
+use App\Services\ActivityLogger;
 use App\Services\Billing\SubscriptionManager;
 use App\Services\Billing\UsageMeter;
 use App\Support\WorkspaceContext;
@@ -37,7 +38,7 @@ class BillingController extends Controller
         ]);
     }
 
-    public function update(Request $request): RedirectResponse
+    public function update(Request $request, ActivityLogger $logger): RedirectResponse
     {
         $this->authorizeFullAdmin();
 
@@ -46,6 +47,7 @@ class BillingController extends Controller
         ]);
 
         $workspace = $this->workspace();
+        $previousTier = $workspace->tier();
 
         if (! $this->subscriptions->changeTier($workspace, $data['tier'])) {
             $cap = $this->subscriptions->tiers()[$data['tier']]['max_payees'] ?? null;
@@ -55,14 +57,25 @@ class BillingController extends Controller
                 : 'Could not change the subscription tier.']);
         }
 
+        $logger->log('billing.tier_changed', "Changed subscription from {$previousTier} to {$data['tier']}.", $workspace, [
+            'changes' => ['tier' => ['old' => $previousTier, 'new' => $data['tier']]],
+        ]);
+
         return redirect()->route('admin.billing.index')->with('status', 'Subscription updated.');
     }
 
-    public function startTrial(): RedirectResponse
+    public function startTrial(ActivityLogger $logger): RedirectResponse
     {
         $this->authorizeFullAdmin();
 
-        $started = $this->subscriptions->startTrial($this->workspace());
+        $workspace = $this->workspace();
+        $started = $this->subscriptions->startTrial($workspace);
+
+        if ($started) {
+            $logger->log('billing.trial_started', 'Started a free trial.', $workspace, [
+                'trial_ends_at' => $workspace->fresh()->trial_ends_at?->toIso8601String(),
+            ]);
+        }
 
         return redirect()->route('admin.billing.index')->with(
             'status',

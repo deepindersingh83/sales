@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Admin\ActivityLogController;
 use App\Http\Controllers\Admin\AliasController;
 use App\Http\Controllers\Admin\AnnouncementController;
 use App\Http\Controllers\Admin\BillingController;
@@ -177,6 +178,9 @@ Route::middleware(['auth', 'verified', 'workspace.admin'])
         Route::get('fx', [FxRateController::class, 'index'])->name('fx.index');
         Route::post('fx', [FxRateController::class, 'store'])->name('fx.store');
         Route::delete('fx/{fxRate}', [FxRateController::class, 'destroy'])->name('fx.destroy');
+
+        // Audit trail of admin actions (Full + Limited Admin, with ?export=csv).
+        Route::get('activity', [ActivityLogController::class, 'index'])->name('activity.index');
 
         // Built-in reports (with ?export=csv).
         Route::get('reports', [ReportController::class, 'index'])->name('reports.index');

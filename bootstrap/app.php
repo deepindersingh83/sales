@@ -3,6 +3,7 @@
 use App\Http\Middleware\AuthenticateApiToken;
 use App\Http\Middleware\EnsureUserHasRole;
 use App\Http\Middleware\EnsureWorkspaceAdmin;
+use App\Http\Middleware\RecordRouteActivity;
 use App\Http\Middleware\ResolveWorkspace;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -22,6 +23,7 @@ return Application::configure(basePath: dirname(__DIR__))
         // Resolve the current workspace on every web request, after auth.
         $middleware->web(append: [
             ResolveWorkspace::class,
+            RecordRouteActivity::class,
         ]);
 
         // ...and before route-model binding, which queries tenant-scoped
