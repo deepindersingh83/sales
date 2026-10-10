@@ -14,11 +14,31 @@ class PlanSnapshot
 {
     public function capture(Plan $plan, ?int $userId = null): PlanVersion
     {
+        $snapshot = $this->describe($plan);
+
+        $nextVersion = (int) $plan->versions()->max('version_number') + 1;
+
+        return $plan->versions()->create([
+            'workspace_id' => $plan->workspace_id,
+            'version_number' => $nextVersion,
+            'snapshot' => $snapshot,
+            'created_by_user_id' => $userId,
+        ]);
+    }
+
+    /**
+     * The plan's current configuration in snapshot form, without persisting
+     * a version — what the next calculation run would capture.
+     *
+     * @return array{plan: array<string, mixed>, tiers: array<int, array<string, mixed>>, reward_rules: array<int, array<string, mixed>>, terms: array<int, array<string, mixed>>}
+     */
+    public function describe(Plan $plan): array
+    {
         // Force a fresh load so the snapshot reflects the plan's current state,
         // even if these relations were loaded (and since mutated) earlier.
         $plan->load(['tiers', 'rewardRules', 'terms']);
 
-        $snapshot = [
+        return [
             'plan' => [
                 'name' => $plan->name,
                 'description' => $plan->description,
@@ -54,14 +74,5 @@ class PlanSnapshot
                 'body' => $t->body,
             ])->values()->all(),
         ];
-
-        $nextVersion = (int) $plan->versions()->max('version_number') + 1;
-
-        return $plan->versions()->create([
-            'workspace_id' => $plan->workspace_id,
-            'version_number' => $nextVersion,
-            'snapshot' => $snapshot,
-            'created_by_user_id' => $userId,
-        ]);
     }
 }

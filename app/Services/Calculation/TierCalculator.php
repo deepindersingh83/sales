@@ -82,6 +82,29 @@ class TierCalculator
     }
 
     /**
+     * Index of the tier a rep has reached: the one with the highest lower
+     * threshold at or below the attainment. Null when below every tier.
+     *
+     * @param  array<int, array<string, mixed>>  $tiers
+     */
+    public function reachedTier(array $tiers, float $attainment): int|string|null
+    {
+        $reached = null;
+        $reachedFrom = -INF;
+
+        foreach ($tiers as $index => $tier) {
+            $from = (float) $tier['threshold_from'];
+
+            if ($attainment >= $from && $from > $reachedFrom) {
+                $reached = $index;
+                $reachedFrom = $from;
+            }
+        }
+
+        return $reached;
+    }
+
+    /**
      * Index of the one non-cumulative rate tier whose [from, to] band contains
      * the attainment — the highest `from` wins when bands share a boundary.
      *

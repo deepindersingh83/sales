@@ -88,6 +88,7 @@
                             <td class="px-6 py-4 text-right">
                                 <div class="flex items-center justify-end gap-3">
                                     <a href="{{ route('statements.pdf', $member) }}" class="text-brand-600 hover:text-brand-800 text-sm">Statement PDF</a>
+                                    <a href="{{ route('estimate.show', ['member_id' => $member->id]) }}" class="text-brand-600 hover:text-brand-800 text-sm">Estimate</a>
                                     <form method="POST" action="{{ route('admin.members.destroy', $member) }}" onsubmit="return confirm('Remove this member from the workspace?')">
                                         @csrf @method('DELETE')
                                         <button class="text-rose-600 hover:text-rose-800 text-sm">Remove</button>

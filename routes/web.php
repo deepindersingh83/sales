@@ -26,6 +26,7 @@ use App\Http\Controllers\Admin\XeroSettingsController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DisputeController;
 use App\Http\Controllers\EnrollmentController;
+use App\Http\Controllers\EstimateController;
 use App\Http\Controllers\LeaderboardController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\RepController;
@@ -67,6 +68,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/my/statement', [RepController::class, 'statement'])->name('my.statement');
     Route::get('/my/team', [RepController::class, 'team'])->name('my.team');
     Route::get('/statements/{member}/pdf', [StatementController::class, 'pdf'])->name('statements.pdf');
+    Route::get('/my/estimate', [EstimateController::class, 'show'])->name('estimate.show');
 
     // Global search across the current workspace.
     Route::get('/search', [SearchController::class, 'index'])->name('search.index');

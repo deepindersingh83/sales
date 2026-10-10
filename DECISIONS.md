@@ -83,6 +83,18 @@ running `DECISIONS.md`.
   **Who can view:** Full Admins and Limited Admins (read-only oversight). Plan Admins cannot —
   most entries are workspace-wide, not per plan. Limited Admins do not see entries whose subject
   is a plan hidden from them or a calc run of such a plan.
+- **D15 — Commission estimator ("what if").** `CommissionCalculator` now holds the
+  formula/tier/cap math the engine used inline, so the engine and `CommissionEstimator` share it.
+  Current attainment = the rep's **released** credits on runs of the plan whose transactions fall
+  in the plan's current window (same rules as the engine: plan dates, or quarter/year to date for
+  qtd/ytd; unbounded when the plan has no dates). Released true-up credits are deltas, so summing
+  them is correct; if a workspace releases two full (non-true-up) runs over the same window the
+  attainment is double-counted, exactly as the released totals elsewhere would be. The deal is
+  entered in the plan's metric and currency and added to attainment and to that metric's total;
+  revenue/profit for formula plans are each credit's share of its transaction. Estimates use the
+  plan's live configuration (what the next run would snapshot) and cover tier commission only —
+  reward rules and manager overrides are excluded. Reps see active plans they are enrolled in or
+  have released credits on; admins can estimate for any member on plans they may view.
 
 ## Open items / deferred (Phase 2, not built)
 

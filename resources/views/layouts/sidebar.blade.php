@@ -112,6 +112,7 @@
             <x-ui.nav-item :href="route('admin.activity.index')" :active="request()->routeIs('admin.activity.*')" :icon="$ico['report']">Activity log</x-ui.nav-item>
         @endif
     @else
+        <x-ui.nav-item :href="route('estimate.show')" :active="request()->routeIs('estimate.*')" :icon="$ico['calc']">Estimate commission</x-ui.nav-item>
         <x-ui.nav-item :href="route('my.team')" :active="request()->routeIs('my.team')" :icon="$ico['team']">My team</x-ui.nav-item>
         <x-ui.nav-item :href="route('leaderboard.index')" :active="request()->routeIs('leaderboard.*')" :icon="$ico['report']">Leaderboard</x-ui.nav-item>
         <x-ui.nav-item :href="route('enrollments.index')" :active="request()->routeIs('enrollments.*')" :icon="$ico['plans']">Plans &amp; terms</x-ui.nav-item>
