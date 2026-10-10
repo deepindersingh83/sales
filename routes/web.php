@@ -7,6 +7,7 @@ use App\Http\Controllers\Admin\CalcRunController;
 use App\Http\Controllers\Admin\CalcRunReleaseController;
 use App\Http\Controllers\Admin\ConnectorController;
 use App\Http\Controllers\Admin\ContestController;
+use App\Http\Controllers\Admin\CustomerController;
 use App\Http\Controllers\Admin\DisputeQueueController;
 use App\Http\Controllers\Admin\FxRateController;
 use App\Http\Controllers\Admin\ImportSourceController;
@@ -100,6 +101,10 @@ Route::middleware(['auth', 'verified', 'workspace.admin'])
         Route::post('members', [MemberController::class, 'store'])->name('members.store');
         Route::put('members/{member}', [MemberController::class, 'update'])->name('members.update');
         Route::delete('members/{member}', [MemberController::class, 'destroy'])->name('members.destroy');
+
+        // Customer list (synced from Xero contacts).
+        Route::get('customers', [CustomerController::class, 'index'])->name('customers.index');
+        Route::put('customers/{customer}', [CustomerController::class, 'update'])->name('customers.update');
 
         // Product catalogue.
         Route::get('products', [ProductController::class, 'index'])->name('products.index');

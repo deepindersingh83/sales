@@ -88,6 +88,7 @@
         <div class="pt-3 pb-1 px-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Compensation</div>
         <x-ui.nav-item :href="route('admin.plans.index')" :active="request()->routeIs('admin.plans.*')" :icon="$ico['plans']">Plans</x-ui.nav-item>
         <x-ui.nav-item :href="route('admin.transactions.index')" :active="request()->routeIs('admin.transactions.*') || request()->routeIs('admin.imports.*')" :icon="$ico['tx']">Transactions</x-ui.nav-item>
+        <x-ui.nav-item :href="route('admin.customers.index')" :active="request()->routeIs('admin.customers.*')" :icon="$ico['alias']">Customers</x-ui.nav-item>
         <x-ui.nav-item :href="route('admin.import-sources.index')" :active="request()->routeIs('admin.import-sources.*')" :icon="$ico['tx']">Recurring imports</x-ui.nav-item>
         <x-ui.nav-item :href="route('admin.products.index')" :active="request()->routeIs('admin.products.*')" :icon="$ico['plans']">Products</x-ui.nav-item>
         <x-ui.nav-item :href="route('admin.aliases.index')" :active="request()->routeIs('admin.aliases.*')" :icon="$ico['alias']">Aliases</x-ui.nav-item>
