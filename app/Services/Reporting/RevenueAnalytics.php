@@ -33,6 +33,15 @@ class RevenueAnalytics
         'payment' => 'Payment status (paid / part-paid / unpaid)',
     ];
 
+    /** Ageing buckets for outstanding balances, by days past the due date. */
+    public const AGING_BUCKETS = [
+        'current' => 'Current',
+        'd1_30' => '1–30 days',
+        'd31_60' => '31–60 days',
+        'd61_90' => '61–90 days',
+        'd90_plus' => '90+ days',
+    ];
+
     public function __construct(
         protected WorkspaceContext $context,
         protected FxConverter $fx,
@@ -48,7 +57,7 @@ class RevenueAnalytics
      * Headline KPIs for the range, with growth against the equally long
      * preceding range when both bounds are given.
      *
-     * @return array{revenue:float, paid:float, outstanding:float, profit:float, margin:?float, deals:int, average_deal:float, customers:int, growth:?float, currency:string}
+     * @return array{revenue:float, paid:float, outstanding:float, overdue:float, profit:float, margin:?float, deals:int, average_deal:float, customers:int, growth:?float, currency:string}
      */
     public function kpis(?Carbon $from = null, ?Carbon $to = null): array
     {
@@ -69,6 +78,7 @@ class RevenueAnalytics
             'revenue' => $revenue,
             'paid' => round($rows->sum('paid'), 2),
             'outstanding' => round($rows->sum('outstanding'), 2),
+            'overdue' => round($rows->where('aging', '!=', 'current')->sum('outstanding'), 2),
             'profit' => $profit,
             'margin' => $profitBase > 0 ? round($profit / $profitBase * 100, 1) : null,
             'deals' => $rows->count(),
@@ -83,7 +93,7 @@ class RevenueAnalytics
      * Revenue grouped by one dimension. Time dimensions sort chronologically;
      * the rest sort by revenue, largest first.
      *
-     * @return Collection<int, array{key:string, revenue:float, paid:float, outstanding:float, profit:float, deals:int, share:float}>
+     * @return Collection<int, array{key:string, revenue:float, paid:float, outstanding:float, aging:array<string, float>, profit:float, deals:int, share:float}>
      */
     public function breakdown(string $dimension, ?Carbon $from = null, ?Carbon $to = null): Collection
     {
@@ -105,6 +115,9 @@ class RevenueAnalytics
             'revenue' => round($group->sum('revenue'), 2),
             'paid' => round($group->sum('paid'), 2),
             'outstanding' => round($group->sum('outstanding'), 2),
+            'aging' => collect(self::AGING_BUCKETS)->map(fn ($label, $bucket) => round(
+                $group->where('aging', $bucket)->sum('outstanding'), 2,
+            ))->all(),
             'profit' => round($group->sum('profit'), 2),
             'deals' => $group->pluck('id')->unique()->count(),
             'share' => round($group->sum('revenue') / $total * 100, 1),
@@ -113,6 +126,32 @@ class RevenueAnalytics
         return in_array($dimension, ['month', 'quarter', 'year'], true)
             ? $result->sortBy('key')->values()
             : $result->sortByDesc('revenue')->values();
+    }
+
+    /**
+     * Which ageing bucket an outstanding amount falls in, by days past its due
+     * date as of today. No due date (e.g. CSV imports, credit notes) counts as
+     * current.
+     */
+    protected function agingBucket(mixed $dueDate): string
+    {
+        if (blank($dueDate)) {
+            return 'current';
+        }
+
+        try {
+            $daysOverdue = (int) Carbon::parse($dueDate)->startOfDay()->diffInDays(now()->startOfDay(), false);
+        } catch (\Throwable) {
+            return 'current';
+        }
+
+        return match (true) {
+            $daysOverdue <= 0 => 'current',
+            $daysOverdue <= 30 => 'd1_30',
+            $daysOverdue <= 60 => 'd31_60',
+            $daysOverdue <= 90 => 'd61_90',
+            default => 'd90_plus',
+        };
     }
 
     /**
@@ -145,6 +184,7 @@ class RevenueAnalytics
                     'revenue' => $revenue,
                     'paid' => $revenue - $outstanding,
                     'outstanding' => $outstanding,
+                    'aging' => $this->agingBucket(data_get($t->raw_data, 'due_date')),
                     'profit' => $t->profit_amount !== null ? $convert((float) $t->profit_amount) : null,
                     'month' => $date->format('Y-m'),
                     'quarter' => $date->format('Y').'-Q'.$date->quarter,

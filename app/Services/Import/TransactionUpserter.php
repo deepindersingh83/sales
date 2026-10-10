@@ -64,9 +64,13 @@ class TransactionUpserter
                 'transaction_date' => $date,
             ];
 
-            // Sources that know payment state (e.g. Xero) drive pay-when-paid.
+            // Sources that know payment state (e.g. Xero) drive pay-when-paid,
+            // including the date the cash actually arrived.
             if (array_key_exists('is_paid', $row)) {
                 $attributes['is_paid'] = (bool) $row['is_paid'];
+            }
+            if (array_key_exists('paid_at', $row)) {
+                $attributes['paid_at'] = $this->toDate($row['paid_at']) ?: null;
             }
 
             // A source can exclude a row (e.g. a voided invoice) but never

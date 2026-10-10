@@ -24,6 +24,7 @@ class Transaction extends Model
         'transaction_date',
         'excluded',
         'is_paid',
+        'paid_at',
     ];
 
     protected function casts(): array
@@ -35,6 +36,7 @@ class Transaction extends Model
             'transaction_date' => 'date',
             'excluded' => 'boolean',
             'is_paid' => 'boolean',
+            'paid_at' => 'date',
         ];
     }
 
@@ -73,9 +75,18 @@ class Transaction extends Model
         return $this->is_paid ? 0.0 : 1.0;
     }
 
-    /** Paid, Part-paid or Unpaid. */
+    public function isCreditNote(): bool
+    {
+        return data_get($this->raw_data, 'type') === 'credit_note';
+    }
+
+    /** Paid, Part-paid, Unpaid — or Credit note. */
     public function paymentStatus(): string
     {
+        if ($this->isCreditNote()) {
+            return 'Credit note';
+        }
+
         $fraction = $this->outstandingFraction();
 
         return match (true) {

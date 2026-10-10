@@ -237,19 +237,24 @@ class ReportController extends Controller
         $data = $request->validate([
             'from' => ['nullable', 'date'],
             'to' => ['nullable', 'date', 'after_or_equal:from'],
-            'sort' => ['nullable', 'in:revenue,outstanding,paid,customer'],
+            'sort' => ['nullable', 'in:revenue,outstanding,overdue,paid,customer'],
         ]);
 
         $from = isset($data['from']) ? Carbon::parse($data['from'])->startOfDay() : null;
         $to = isset($data['to']) ? Carbon::parse($data['to'])->startOfDay() : null;
         $sort = $data['sort'] ?? 'outstanding';
 
-        $rows = $revenue->breakdown('customer', $from, $to);
+        $rows = $revenue->breakdown('customer', $from, $to)
+            ->map(fn (array $r) => $r + ['overdue' => round($r['outstanding'] - $r['aging']['current'], 2)]);
         $rows = $sort === 'customer' ? $rows->sortBy('key')->values() : $rows->sortByDesc($sort)->values();
 
         if ($request->query('export') === 'csv') {
-            return $this->csv('customer-balances.csv', ['Customer', 'Invoices', 'Revenue', 'Paid', 'Outstanding'],
-                $rows->map(fn ($r) => [$r['key'], $r['deals'], $r['revenue'], $r['paid'], $r['outstanding']]));
+            return $this->csv('customer-balances.csv',
+                array_merge(['Customer', 'Invoices', 'Revenue', 'Paid', 'Outstanding'], array_values(RevenueAnalytics::AGING_BUCKETS)),
+                $rows->map(fn ($r) => array_merge(
+                    [$r['key'], $r['deals'], $r['revenue'], $r['paid'], $r['outstanding']],
+                    array_values($r['aging']),
+                )));
         }
 
         return view('admin.reports.customers', [

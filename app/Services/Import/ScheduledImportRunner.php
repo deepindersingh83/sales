@@ -49,6 +49,10 @@ class ScheduledImportRunner
             // column was detected): surface it instead of a silent "success".
             $allSkipped = $result['skipped'] > 0 && $result['created'] + $result['updated'] === 0;
 
+            if ($source->isConnector()) {
+                $config = $this->syncContacts($source, $config, $startedAt);
+            }
+
             $source->forceFill([
                 'last_synced_at' => $startedAt,
                 'last_error' => $allSkipped
@@ -60,6 +64,30 @@ class ScheduledImportRunner
 
             return $result;
         });
+    }
+
+    /**
+     * Sync the connector's customer contacts. Kept apart from the transaction
+     * import: a failure here (e.g. the app lacks the contacts scope) is
+     * recorded on the source but does not fail the invoice sync.
+     *
+     * @param  array<string, mixed>  $config
+     * @return array<string, mixed>
+     */
+    protected function syncContacts(ImportSource $source, array $config, \DateTimeInterface $startedAt): array
+    {
+        try {
+            $this->xero->syncContacts($source->forceFill(['config' => $config]));
+
+            return array_merge($config, [
+                'contacts_synced_through' => $startedAt->format(DATE_ATOM),
+                'contacts_error' => null,
+            ]);
+        } catch (\Throwable $e) {
+            report($e);
+
+            return array_merge($config, ['contacts_error' => $e->getMessage()]);
+        }
     }
 
     /**
@@ -93,6 +121,9 @@ class ScheduledImportRunner
     {
         $rows = $this->xero->rows($source);
 
-        return [$rows, array_merge($source->config ?? [], ['synced_through' => $startedAt->format(DATE_ATOM)])];
+        return [$rows, array_merge($source->config ?? [], [
+            'synced_through' => $startedAt->format(DATE_ATOM),
+            'sync_version' => XeroDriver::SYNC_VERSION,
+        ])];
     }
 }

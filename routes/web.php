@@ -202,6 +202,7 @@ Route::middleware(['auth', 'verified', 'workspace.admin'])
         Route::delete('connectors/xero/app', [XeroSettingsController::class, 'destroyApp'])->name('connectors.xero.app.destroy');
         Route::post('connectors/xero/{source}/check', [XeroSettingsController::class, 'check'])->whereNumber('source')->name('connectors.xero.check');
         Route::put('connectors/xero/{source}', [XeroSettingsController::class, 'update'])->whereNumber('source')->name('connectors.xero.update');
+        Route::post('connectors/xero/{source}/resync', [XeroSettingsController::class, 'resync'])->whereNumber('source')->name('connectors.xero.resync');
         Route::delete('connectors/xero/{source}', [XeroSettingsController::class, 'destroy'])->whereNumber('source')->name('connectors.xero.destroy');
     });
 

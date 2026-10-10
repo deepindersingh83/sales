@@ -29,6 +29,13 @@ class XeroConnectorTest extends TestCase
             'services.xero.client_secret' => 'xero-secret',
         ]);
         Http::preventStrayRequests();
+        // Credit notes and contacts are fetched on every sync. The first
+        // matching fake wins, so these cannot be overridden per test: credit
+        // note and contact behaviour is covered in XeroCustomerDataTest.
+        Http::fake([
+            XeroClient::CREDIT_NOTES_URL.'*' => Http::response(['CreditNotes' => []]),
+            XeroClient::CONTACTS_URL.'*' => Http::response(['Contacts' => []]),
+        ]);
     }
 
     private function invoice(string $id, string $status, float $subTotal, array $extra = []): array
@@ -238,7 +245,7 @@ class XeroConnectorTest extends TestCase
     {
         $ws = Workspace::factory()->create();
         $source = $this->connectedSource($ws);
-        $source->update(['config' => array_merge($source->config, ['synced_through' => '2026-09-01T00:00:00+00:00'])]);
+        $source->update(['config' => array_merge($source->config, ['synced_through' => '2026-09-01T00:00:00+00:00', 'sync_version' => 2])]);
         $this->useWorkspace($ws);
         Transaction::create(['workspace_id' => $ws->id, 'external_id' => 'A', 'source_system' => 'xero', 'amount' => 1000, 'currency' => 'AUD', 'raw_data' => []]);
 
@@ -305,7 +312,8 @@ class XeroConnectorTest extends TestCase
         app(ScheduledImportRunner::class)->run($second->fresh());
 
         // The second organisation adopted the rotated token instead of reusing the spent one.
-        Http::assertSentCount(3);
+        $tokenRefreshes = Http::recorded(fn (Request $r) => $r->url() === XeroClient::TOKEN_URL)->count();
+        $this->assertSame(1, $tokenRefreshes);
         $this->assertSame('refresh-2', $second->fresh()->credentials['refresh_token']);
         $this->assertSame('T-2', $second->fresh()->credentials['tenant_id']);
         $this->assertSame('other-refresh', $otherGrant->fresh()->credentials['refresh_token']);

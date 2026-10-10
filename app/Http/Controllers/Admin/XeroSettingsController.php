@@ -9,6 +9,7 @@ use App\Models\IntegrationSetting;
 use App\Models\Transaction;
 use App\Services\Connectors\Xero\XeroClient;
 use App\Services\Connectors\Xero\XeroDriver;
+use App\Services\Import\ScheduledImportRunner;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -113,6 +114,28 @@ class XeroSettingsController extends Controller
 
         return redirect()->route('admin.connectors.xero.show')
             ->with('status', "{$source->name} now syncs ".($schedule ?? 'manually only').'.');
+    }
+
+    /**
+     * Re-import everything from Xero (not just changes since the last sync),
+     * e.g. after records were changed in ways Xero doesn't flag as modified.
+     * Re-imports are idempotent, so nothing is duplicated.
+     */
+    public function resync(ImportSource $source, ScheduledImportRunner $runner): RedirectResponse
+    {
+        $this->authorizeSource($source);
+
+        $source->forceFill(['config' => collect($source->config ?? [])
+            ->except(['synced_through', 'contacts_synced_through'])->all()])->save();
+
+        try {
+            $result = $runner->run($source);
+        } catch (\Throwable $e) {
+            return redirect()->route('admin.connectors.xero.show')->with('check_error', "{$source->name}: full resync failed — {$e->getMessage()}");
+        }
+
+        return redirect()->route('admin.connectors.xero.show')->with('status',
+            "Full resync of {$source->name}: {$result['created']} new, {$result['updated']} updated.");
     }
 
     /** Revoke access at Xero and remove the connection; imported transactions stay. */

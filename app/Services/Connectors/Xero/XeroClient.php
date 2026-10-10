@@ -24,6 +24,10 @@ class XeroClient
 
     public const INVOICES_URL = 'https://api.xero.com/api.xro/2.0/Invoices';
 
+    public const CREDIT_NOTES_URL = 'https://api.xero.com/api.xro/2.0/CreditNotes';
+
+    public const CONTACTS_URL = 'https://api.xero.com/api.xro/2.0/Contacts';
+
     /** Xero returns at most this many invoices per page. */
     public const PAGE_SIZE = 100;
 
@@ -127,24 +131,62 @@ class XeroClient
      */
     public function invoices(string $accessToken, string $tenantId, int $page, ?Carbon $modifiedSince, array $statuses): array
     {
+        return $this->page($accessToken, $tenantId, self::INVOICES_URL, 'Invoices', $page, $modifiedSince, [
+            'where' => 'Type=="ACCREC"',
+            'Statuses' => implode(',', $statuses),
+        ]);
+    }
+
+    /**
+     * One page of sales credit notes (ACCRECCREDIT): refunds and credits
+     * against sales invoices.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function creditNotes(string $accessToken, string $tenantId, int $page, ?Carbon $modifiedSince): array
+    {
+        return $this->page($accessToken, $tenantId, self::CREDIT_NOTES_URL, 'CreditNotes', $page, $modifiedSince, [
+            'where' => 'Type=="ACCRECCREDIT"',
+        ]);
+    }
+
+    /**
+     * One page of customer contacts (including archived ones, so archiving in
+     * Xero is reflected here).
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function contacts(string $accessToken, string $tenantId, int $page, ?Carbon $modifiedSince): array
+    {
+        return $this->page($accessToken, $tenantId, self::CONTACTS_URL, 'Contacts', $page, $modifiedSince, [
+            'where' => 'IsCustomer==true',
+            'includeArchived' => 'true',
+        ]);
+    }
+
+    /**
+     * Fetch one page of an Accounting API collection, optionally only records
+     * modified since a timestamp.
+     *
+     * @param  array<string, string>  $query
+     * @return array<int, array<string, mixed>>
+     */
+    protected function page(string $accessToken, string $tenantId, string $url, string $key, int $page, ?Carbon $modifiedSince, array $query): array
+    {
         $request = $this->api($accessToken, $tenantId);
 
         if ($modifiedSince) {
             $request->withHeaders(['If-Modified-Since' => $modifiedSince->copy()->utc()->format('Y-m-d\TH:i:s')]);
         }
 
-        $response = $request->get(self::INVOICES_URL, [
-            'page' => $page,
-            'where' => 'Type=="ACCREC"',
-            'Statuses' => implode(',', $statuses),
-        ]);
+        $response = $request->get($url, array_merge(['page' => $page], $query));
 
         // Xero answers 304 when nothing changed since If-Modified-Since.
         if ($response->status() === 304) {
             return [];
         }
 
-        return $response->throw()->json('Invoices') ?? [];
+        return $response->throw()->json($key) ?? [];
     }
 
     protected function api(string $accessToken, string $tenantId): PendingRequest
