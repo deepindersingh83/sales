@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Models\CalcRun;
 use App\Models\Workspace;
 use App\Services\Calculation\PayoutPipeline;
+use App\Services\Reporting\MemberStatement;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -43,6 +44,7 @@ class CalcRunReleaseController extends Controller
             'run' => $calcRun,
             'rewards' => $calcRun->rewards()->with(['user', 'plan'])->orderBy('user_id')->get(),
             'counts' => $this->counts($calcRun->rewards()),
+            'statementPeriod' => MemberStatement::periodForRun($calcRun),
         ]);
     }
 

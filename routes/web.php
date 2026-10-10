@@ -29,6 +29,7 @@ use App\Http\Controllers\LeaderboardController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\RepController;
 use App\Http\Controllers\SearchController;
+use App\Http\Controllers\StatementController;
 use App\Http\Controllers\SurveyController;
 use App\Http\Controllers\WorkspaceController;
 use Illuminate\Support\Facades\Route;
@@ -64,6 +65,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Rep extras: statement download + manager/team view.
     Route::get('/my/statement', [RepController::class, 'statement'])->name('my.statement');
     Route::get('/my/team', [RepController::class, 'team'])->name('my.team');
+    Route::get('/statements/{member}/pdf', [StatementController::class, 'pdf'])->name('statements.pdf');
 
     // Global search across the current workspace.
     Route::get('/search', [SearchController::class, 'index'])->name('search.index');

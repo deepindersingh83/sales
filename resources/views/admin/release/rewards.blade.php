@@ -56,7 +56,12 @@
                     <tbody class="divide-y divide-gray-200 text-sm">
                         @foreach ($rewards as $reward)
                             <tr>
-                                <td class="px-6 py-4 text-gray-900">{{ $reward->user?->name ?? '—' }}</td>
+                                <td class="px-6 py-4 text-gray-900">
+                                    {{ $reward->user?->name ?? '—' }}
+                                    @if ($reward->user)
+                                        <a href="{{ route('statements.pdf', ['member' => $reward->user, ...$statementPeriod]) }}" class="ml-1 text-xs text-brand-600 hover:text-brand-800">PDF</a>
+                                    @endif
+                                </td>
                                 <td class="px-6 py-4 text-gray-700">
                                     {{ $reward->reward_type->label() }}
                                     @if (isset($reward->meta['label']))<span class="text-gray-400">— {{ $reward->meta['label'] }}</span>@endif

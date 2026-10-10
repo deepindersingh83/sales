@@ -64,6 +64,14 @@ running `DECISIONS.md`.
 - **D12 — Manager overrides.** `workspace_user.manager_id` defines a single-level reporting line;
   a plan's `manager_override_percent` pays each manager that % of their direct reports' credited
   attainment as an `override` reward. Multi-level rollups are a future extension.
+- **D13 — PDF commission statements.** Built with `barryvdh/laravel-dompdf` (user-requested).
+  A statement covers **released** data only. Credits fall in the period by transaction date
+  (credit date when the transaction has none) and rewards by the date they were calculated —
+  the same bucketing ReportBuilder uses. Amounts are never FX-converted; totals are grouped by
+  currency. Members download their own; any admin role may download another member's, limited
+  to the plans that admin may view (ReportScope). Remote images are disabled in dompdf (an
+  admin-supplied `logo_url` would otherwise be fetched server-side), so the PDF header shows the
+  brand name and colour, not the logo.
 
 ## Open items / deferred (Phase 2, not built)
 
