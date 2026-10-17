@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Enums\Role;
 use App\Http\Controllers\Controller;
 use App\Models\Workspace;
+use App\Services\ActivityLogger;
 use App\Support\WorkspaceContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -22,7 +23,7 @@ class WorkspaceSettingsController extends Controller
         return view('admin.settings.edit', ['workspace' => $this->workspace()]);
     }
 
-    public function update(Request $request): RedirectResponse
+    public function update(Request $request, ActivityLogger $logger): RedirectResponse
     {
         $this->authorizeFullAdmin();
 
@@ -34,7 +35,11 @@ class WorkspaceSettingsController extends Controller
             'logo_url' => ['nullable', 'url', 'max:2048'],
         ]);
 
-        $this->workspace()->update([
+        $workspace = $this->workspace();
+        $audited = ['name', 'base_currency', 'brand_name', 'brand_color', 'logo_url'];
+        $before = $workspace->only($audited);
+
+        $workspace->update([
             'name' => $data['name'],
             'base_currency' => strtoupper($data['base_currency']),
             'brand_name' => $data['brand_name'] ?? null,
@@ -42,14 +47,24 @@ class WorkspaceSettingsController extends Controller
             'logo_url' => $data['logo_url'] ?? null,
         ]);
 
+        $changes = ActivityLogger::changes($before, $workspace->only($audited));
+        if ($changes !== []) {
+            $logger->log('workspace.settings_updated', 'Updated workspace settings ('.implode(', ', array_keys($changes)).').', $workspace, [
+                'changes' => $changes,
+            ]);
+        }
+
         return redirect()->route('admin.settings.edit')->with('status', 'Settings saved.');
     }
 
-    public function regenerateToken(): RedirectResponse
+    public function regenerateToken(ActivityLogger $logger): RedirectResponse
     {
         $this->authorizeFullAdmin();
 
-        $token = $this->workspace()->regenerateApiToken();
+        $workspace = $this->workspace();
+        $token = $workspace->regenerateApiToken();
+
+        $logger->log('workspace.api_token_regenerated', 'Regenerated the workspace API token.', $workspace);
 
         return redirect()->route('admin.settings.edit')
             ->with('status', 'New API token generated — copy it now, it is shown only once.')

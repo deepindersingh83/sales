@@ -7,7 +7,9 @@ use App\Enums\RewardType;
 use App\Http\Controllers\Controller;
 use App\Models\CalcRun;
 use App\Models\Workspace;
+use App\Services\ActivityLogger;
 use App\Services\Calculation\PayoutPipeline;
+use App\Services\Reporting\MemberStatement;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -22,7 +24,10 @@ use Illuminate\View\View;
  */
 class CalcRunReleaseController extends Controller
 {
-    public function __construct(protected PayoutPipeline $pipeline) {}
+    public function __construct(
+        protected PayoutPipeline $pipeline,
+        protected ActivityLogger $logger,
+    ) {}
 
     public function credits(CalcRun $calcRun): View
     {
@@ -43,11 +48,12 @@ class CalcRunReleaseController extends Controller
             'run' => $calcRun,
             'rewards' => $calcRun->rewards()->with(['user', 'plan'])->orderBy('user_id')->get(),
             'counts' => $this->counts($calcRun->rewards()),
+            'statementPeriod' => MemberStatement::periodForRun($calcRun),
         ]);
     }
 
     /** Add a manual reward adjustment (positive or negative) to a run. */
-    public function storeAdjustment(Request $request, CalcRun $calcRun): RedirectResponse
+    public function storeAdjustment(Request $request, CalcRun $calcRun, ActivityLogger $logger): RedirectResponse
     {
         Gate::authorize('release', $calcRun);
 
@@ -63,7 +69,7 @@ class CalcRunReleaseController extends Controller
             'user_id.not_in' => 'You cannot add an adjustment for yourself.',
         ]);
 
-        $calcRun->rewards()->create([
+        $adjustment = $calcRun->rewards()->create([
             'user_id' => $data['user_id'],
             'plan_id' => $calcRun->plan_id,
             'reward_type' => RewardType::Adjustment->value,
@@ -75,6 +81,14 @@ class CalcRunReleaseController extends Controller
 
         // The run's numbers changed, so any earlier approval no longer covers them.
         $calcRun->update(['approved_at' => null, 'approved_by_user_id' => null]);
+
+        $logger->log('adjustment.added', "Added a {$adjustment->currency} ".number_format((float) $adjustment->computed_amount, 2)." adjustment on run #{$calcRun->id}.", $calcRun, [
+            'reward_id' => $adjustment->id,
+            'user_id' => (int) $data['user_id'],
+            'amount' => (float) $adjustment->computed_amount,
+            'currency' => $adjustment->currency,
+            'reason' => $data['reason'],
+        ]);
 
         return redirect()->route('admin.calc-runs.rewards.index', $calcRun)->with('status', 'Adjustment added.');
     }
@@ -112,13 +126,22 @@ class CalcRunReleaseController extends Controller
             $query->whereIn('id', $data['ids']);
         }
 
-        $changed = 0;
+        $changedIds = [];
         foreach ($query->get() as $item) {
             $target = $this->pipeline->next($item->status, $data['action']);
             if ($target !== null) {
                 $item->update(['status' => $target]);
-                $changed++;
+                $changedIds[] = $item->id;
             }
+        }
+        $changed = count($changedIds);
+
+        if ($changed > 0) {
+            $past = ['review' => 'reviewed', 'release' => 'released', 'revert' => 'reverted'][$data['action']];
+            $this->logger->log("{$type}.{$past}", ucfirst($past)." {$changed} {$type} on run #{$calcRun->id}.", $calcRun, [
+                'count' => $changed,
+                'ids' => $changedIds,
+            ]);
         }
 
         return redirect()

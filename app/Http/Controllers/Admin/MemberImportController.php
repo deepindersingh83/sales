@@ -6,6 +6,7 @@ use App\Enums\Role;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Models\Workspace;
+use App\Services\ActivityLogger;
 use App\Services\Billing\UsageMeter;
 use App\Services\Import\CsvReader;
 use App\Support\WorkspaceContext;
@@ -35,7 +36,7 @@ class MemberImportController extends Controller
         return view('admin.members.import', ['roles' => Role::cases()]);
     }
 
-    public function store(Request $request): RedirectResponse
+    public function store(Request $request, ActivityLogger $logger): RedirectResponse
     {
         $this->authorizeFullAdmin();
         $workspace = $this->workspace();
@@ -135,6 +136,12 @@ class MemberImportController extends Controller
         }
 
         $summary = "Import complete — {$created} added, {$updated} updated, {$skipped} skipped.";
+
+        $logger->log('member.imported', "Imported members: {$created} added, {$updated} updated, {$skipped} skipped.", null, [
+            'created' => $created,
+            'updated' => $updated,
+            'skipped' => $skipped,
+        ]);
         $redirect = redirect()->route('admin.members.index')->with('status', $summary);
 
         return $errors ? $redirect->with('import_errors', $errors) : $redirect;

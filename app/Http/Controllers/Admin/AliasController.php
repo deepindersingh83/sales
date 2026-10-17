@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Alias;
 use App\Models\Workspace;
+use App\Services\ActivityLogger;
 use App\Support\WorkspaceContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -14,6 +15,9 @@ use Illuminate\View\View;
 
 class AliasController extends Controller
 {
+    /** Alias attributes recorded in the activity log. */
+    protected const AUDITED = ['user_id', 'alias_value', 'match_field', 'match_type', 'split_percent'];
+
     public function index(): View
     {
         Gate::authorize('viewAny', Alias::class);
@@ -33,11 +37,15 @@ class AliasController extends Controller
         ]);
     }
 
-    public function store(Request $request): RedirectResponse
+    public function store(Request $request, ActivityLogger $logger): RedirectResponse
     {
         Gate::authorize('create', Alias::class);
 
-        Alias::create($this->validated($request));
+        $alias = Alias::create($this->validated($request));
+
+        $logger->log('alias.created', "Created alias \"{$alias->alias_value}\".", $alias, [
+            'attributes' => $alias->only(self::AUDITED),
+        ]);
 
         return redirect()->route('admin.aliases.index')->with('status', 'Alias created.');
     }
@@ -52,20 +60,29 @@ class AliasController extends Controller
         ]);
     }
 
-    public function update(Request $request, Alias $alias): RedirectResponse
+    public function update(Request $request, Alias $alias, ActivityLogger $logger): RedirectResponse
     {
         Gate::authorize('update', $alias);
 
+        $before = $alias->only(self::AUDITED);
         $alias->update($this->validated($request));
+
+        $logger->log('alias.updated', "Updated alias \"{$alias->alias_value}\".", $alias, [
+            'changes' => ActivityLogger::changes($before, $alias->refresh()->only(self::AUDITED)),
+        ]);
 
         return redirect()->route('admin.aliases.index')->with('status', 'Alias updated.');
     }
 
-    public function destroy(Alias $alias): RedirectResponse
+    public function destroy(Alias $alias, ActivityLogger $logger): RedirectResponse
     {
         Gate::authorize('delete', $alias);
 
         $alias->delete();
+
+        $logger->log('alias.deleted', "Deleted alias \"{$alias->alias_value}\".", $alias, [
+            'attributes' => $alias->only(self::AUDITED),
+        ]);
 
         return redirect()->route('admin.aliases.index')->with('status', 'Alias deleted.');
     }

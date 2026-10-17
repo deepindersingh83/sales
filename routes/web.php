@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Admin\ActivityLogController;
 use App\Http\Controllers\Admin\AliasController;
 use App\Http\Controllers\Admin\AnnouncementController;
 use App\Http\Controllers\Admin\BillingController;
@@ -7,6 +8,7 @@ use App\Http\Controllers\Admin\CalcRunController;
 use App\Http\Controllers\Admin\CalcRunReleaseController;
 use App\Http\Controllers\Admin\ConnectorController;
 use App\Http\Controllers\Admin\ContestController;
+use App\Http\Controllers\Admin\CustomerController;
 use App\Http\Controllers\Admin\DisputeQueueController;
 use App\Http\Controllers\Admin\FxRateController;
 use App\Http\Controllers\Admin\ImportSourceController;
@@ -24,10 +26,12 @@ use App\Http\Controllers\Admin\XeroSettingsController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DisputeController;
 use App\Http\Controllers\EnrollmentController;
+use App\Http\Controllers\EstimateController;
 use App\Http\Controllers\LeaderboardController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\RepController;
 use App\Http\Controllers\SearchController;
+use App\Http\Controllers\StatementController;
 use App\Http\Controllers\SurveyController;
 use App\Http\Controllers\WorkspaceController;
 use Illuminate\Support\Facades\Route;
@@ -63,6 +67,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Rep extras: statement download + manager/team view.
     Route::get('/my/statement', [RepController::class, 'statement'])->name('my.statement');
     Route::get('/my/team', [RepController::class, 'team'])->name('my.team');
+    Route::get('/statements/{member}/pdf', [StatementController::class, 'pdf'])->name('statements.pdf');
+    Route::get('/my/estimate', [EstimateController::class, 'show'])->name('estimate.show');
 
     // Global search across the current workspace.
     Route::get('/search', [SearchController::class, 'index'])->name('search.index');
@@ -100,6 +106,10 @@ Route::middleware(['auth', 'verified', 'workspace.admin'])
         Route::post('members', [MemberController::class, 'store'])->name('members.store');
         Route::put('members/{member}', [MemberController::class, 'update'])->name('members.update');
         Route::delete('members/{member}', [MemberController::class, 'destroy'])->name('members.destroy');
+
+        // Customer list (synced from Xero contacts).
+        Route::get('customers', [CustomerController::class, 'index'])->name('customers.index');
+        Route::put('customers/{customer}', [CustomerController::class, 'update'])->name('customers.update');
 
         // Product catalogue.
         Route::get('products', [ProductController::class, 'index'])->name('products.index');
@@ -171,6 +181,9 @@ Route::middleware(['auth', 'verified', 'workspace.admin'])
         Route::post('fx', [FxRateController::class, 'store'])->name('fx.store');
         Route::delete('fx/{fxRate}', [FxRateController::class, 'destroy'])->name('fx.destroy');
 
+        // Audit trail of admin actions (Full + Limited Admin, with ?export=csv).
+        Route::get('activity', [ActivityLogController::class, 'index'])->name('activity.index');
+
         // Built-in reports (with ?export=csv).
         Route::get('reports', [ReportController::class, 'index'])->name('reports.index');
         Route::get('reports/payout-by-user', [ReportController::class, 'payoutByUser'])->name('reports.payout-by-user');
@@ -202,6 +215,7 @@ Route::middleware(['auth', 'verified', 'workspace.admin'])
         Route::delete('connectors/xero/app', [XeroSettingsController::class, 'destroyApp'])->name('connectors.xero.app.destroy');
         Route::post('connectors/xero/{source}/check', [XeroSettingsController::class, 'check'])->whereNumber('source')->name('connectors.xero.check');
         Route::put('connectors/xero/{source}', [XeroSettingsController::class, 'update'])->whereNumber('source')->name('connectors.xero.update');
+        Route::post('connectors/xero/{source}/resync', [XeroSettingsController::class, 'resync'])->whereNumber('source')->name('connectors.xero.resync');
         Route::delete('connectors/xero/{source}', [XeroSettingsController::class, 'destroy'])->whereNumber('source')->name('connectors.xero.destroy');
     });
 

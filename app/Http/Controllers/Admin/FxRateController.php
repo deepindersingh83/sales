@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Enums\Role;
 use App\Http\Controllers\Controller;
 use App\Models\FxRate;
+use App\Services\ActivityLogger;
 use App\Support\WorkspaceContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -27,7 +28,7 @@ class FxRateController extends Controller
         ]);
     }
 
-    public function store(Request $request): RedirectResponse
+    public function store(Request $request, ActivityLogger $logger): RedirectResponse
     {
         $this->authorizeFullAdmin();
 
@@ -38,7 +39,7 @@ class FxRateController extends Controller
             'effective_date' => ['required', 'date'],
         ]);
 
-        FxRate::create([
+        $rate = FxRate::create([
             'workspace_id' => $this->workspaceId(),
             'base_currency' => strtoupper($data['base_currency']),
             'quote_currency' => strtoupper($data['quote_currency']),
@@ -46,15 +47,28 @@ class FxRateController extends Controller
             'effective_date' => $data['effective_date'],
         ]);
 
+        $logger->log('fx_rate.added', "Added FX rate {$rate->base_currency}/{$rate->quote_currency} {$data['rate']} from {$data['effective_date']}.", $rate, [
+            'base_currency' => $rate->base_currency,
+            'quote_currency' => $rate->quote_currency,
+            'rate' => (float) $data['rate'],
+            'effective_date' => $data['effective_date'],
+        ]);
+
         return redirect()->route('admin.fx.index')->with('status', 'FX rate saved.');
     }
 
-    public function destroy(FxRate $fxRate): RedirectResponse
+    public function destroy(FxRate $fxRate, ActivityLogger $logger): RedirectResponse
     {
         $this->authorizeFullAdmin();
         abort_unless($fxRate->workspace_id === $this->workspaceId(), 404);
 
         $fxRate->delete();
+
+        $logger->log('fx_rate.removed', "Removed FX rate {$fxRate->base_currency}/{$fxRate->quote_currency}.", $fxRate, [
+            'base_currency' => $fxRate->base_currency,
+            'quote_currency' => $fxRate->quote_currency,
+            'rate' => (float) $fxRate->rate,
+        ]);
 
         return redirect()->route('admin.fx.index')->with('status', 'FX rate deleted.');
     }

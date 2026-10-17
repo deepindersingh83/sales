@@ -64,6 +64,36 @@ running `DECISIONS.md`.
 - **D12 — Manager overrides.** `workspace_user.manager_id` defines a single-level reporting line;
   a plan's `manager_override_percent` pays each manager that % of their direct reports' credited
   attainment as an `override` reward. Multi-level rollups are a future extension.
+- **D13 — PDF commission statements.** Built with `barryvdh/laravel-dompdf` (user-requested).
+  A statement covers **released** data only. Credits fall in the period by transaction date
+  (credit date when the transaction has none) and rewards by the date they were calculated —
+  the same bucketing ReportBuilder uses. Amounts are never FX-converted; totals are grouped by
+  currency. Members download their own; any admin role may download another member's, limited
+  to the plans that admin may view (ReportScope). Remote images are disabled in dompdf (an
+  admin-supplied `logo_url` would otherwise be fetched server-side), so the PDF header shows the
+  brand name and colour, not the logo.
+- **D14 — Activity log (audit trail).** Controllers call `App\Services\ActivityLogger` explicitly
+  after an admin action succeeds (plans, plan access, calc runs, releases, adjustments, members,
+  aliases, settings, API token, FX, billing, transactions, disputes, customers, and Xero: app
+  keys saved/removed, connected, schedule changed, full resync, disconnected). The logger drops
+  any property whose key looks like a credential (password/secret/token/credential/api key),
+  works with no signed-in user (console: `user_id` null), and records salary changes as
+  "changed" without the figures.
+  **Who can view:** Full Admins and Limited Admins (read-only oversight). Plan Admins cannot —
+  most entries are workspace-wide, not per plan. Limited Admins do not see entries whose subject
+  is a plan hidden from them or a calc run of such a plan.
+- **D15 — Commission estimator ("what if").** `CommissionCalculator` now holds the
+  formula/tier/cap math the engine used inline, so the engine and `CommissionEstimator` share it.
+  Current attainment = the rep's **released** credits on runs of the plan whose transactions fall
+  in the plan's current window (same rules as the engine: plan dates, or quarter/year to date for
+  qtd/ytd; unbounded when the plan has no dates). Released true-up credits are deltas, so summing
+  them is correct; if a workspace releases two full (non-true-up) runs over the same window the
+  attainment is double-counted, exactly as the released totals elsewhere would be. The deal is
+  entered in the plan's metric and currency and added to attainment and to that metric's total;
+  revenue/profit for formula plans are each credit's share of its transaction. Estimates use the
+  plan's live configuration (what the next run would snapshot) and cover tier commission only —
+  reward rules and manager overrides are excluded. Reps see active plans they are enrolled in or
+  have released credits on; admins can estimate for any member on plans they may view.
 
 ## Open items / deferred (Phase 2, not built)
 

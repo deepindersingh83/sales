@@ -3,6 +3,7 @@
 namespace App\Services\Connectors\Xero;
 
 use App\Contracts\ImportSourceDriver;
+use App\Models\Customer;
 use App\Models\ImportSource;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Carbon;
@@ -10,7 +11,8 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 
 /**
- * Imports Xero sales invoices (ACCREC) as transactions.
+ * Imports Xero sales invoices (ACCREC) and sales credit notes (ACCRECCREDIT)
+ * as transactions, and syncs customer contacts into the customer list.
  *
  * Mapping: external_id = InvoiceID, amount = SubTotal (net of tax — commission
  * is normally paid on net revenue), currency = CurrencyCode, date = invoice
@@ -19,13 +21,26 @@ use Illuminate\Support\Str;
  * number, reference, item codes and every line-item tracking category (e.g. a
  * "Sales Rep" category becomes raw_data.sales_rep) so aliases can credit reps.
  *
- * Syncs are incremental: after the first full pull, only invoices modified
+ * Credit notes become NEGATIVE transactions (amount = -SubTotal) so refunds
+ * reduce revenue and commission; their remaining (unallocated) credit is kept
+ * as amount_due so customer balances net it off. Invoices also record their
+ * due date (aged balances) and FullyPaidOnDate as paid_at (pay-when-paid
+ * plans count a deal in the period its cash arrived).
+ *
+ * Syncs are incremental: after the first full pull, only records modified
  * since the last successful sync are requested.
  */
 class XeroDriver implements ImportSourceDriver
 {
     /** Refresh the access token when it has less than this many seconds left. */
     private const TOKEN_LEEWAY_SECONDS = 120;
+
+    /**
+     * Bumped when the import starts bringing in new data (v2: credit notes,
+     * due and paid dates). A source last synced by an older version gets one
+     * full sync so history is back-filled, then goes incremental again.
+     */
+    public const SYNC_VERSION = 2;
 
     public function __construct(protected XeroClient $client) {}
 
@@ -42,7 +57,7 @@ class XeroDriver implements ImportSourceDriver
         $accessToken = $this->freshAccessToken($source);
         $tenantId = $source->credentials['tenant_id'];
 
-        $modifiedSince = isset($source->config['synced_through'])
+        $modifiedSince = isset($source->config['synced_through']) && ($source->config['sync_version'] ?? 1) >= self::SYNC_VERSION
             ? Carbon::parse($source->config['synced_through'])
             : null;
 
@@ -60,7 +75,78 @@ class XeroDriver implements ImportSourceDriver
             $page++;
         } while (count($invoices) >= XeroClient::PAGE_SIZE);
 
+        $page = 1;
+        do {
+            $creditNotes = $this->client->creditNotes($accessToken, $tenantId, $page, $modifiedSince);
+            foreach ($creditNotes as $creditNote) {
+                if (in_array($creditNote['Status'] ?? '', $statuses, true)) {
+                    $rows[] = $this->mapCreditNote($creditNote);
+                }
+            }
+            $page++;
+        } while (count($creditNotes) >= XeroClient::PAGE_SIZE);
+
         return $rows;
+    }
+
+    /**
+     * Upsert this organisation's customer contacts into the customer list.
+     * Incremental after the first run, like transactions.
+     *
+     * @return int The number of contacts created or updated.
+     */
+    public function syncContacts(ImportSource $source): int
+    {
+        $accessToken = $this->freshAccessToken($source);
+        $tenantId = $source->credentials['tenant_id'];
+        $modifiedSince = isset($source->config['contacts_synced_through'])
+            ? Carbon::parse($source->config['contacts_synced_through'])
+            : null;
+
+        $count = 0;
+        $page = 1;
+        do {
+            $contacts = $this->client->contacts($accessToken, $tenantId, $page, $modifiedSince);
+            foreach ($contacts as $contact) {
+                if (empty($contact['ContactID']) || blank($contact['Name'] ?? null)) {
+                    continue;
+                }
+
+                Customer::updateOrCreate(
+                    ['source_system' => 'xero', 'external_id' => $contact['ContactID']],
+                    [
+                        'import_source_id' => $source->id,
+                        'name' => $contact['Name'],
+                        'email' => $contact['EmailAddress'] ?? null,
+                        'phone' => $this->primaryPhone($contact),
+                        'status' => ($contact['ContactStatus'] ?? 'ACTIVE') === 'ARCHIVED' ? 'archived' : 'active',
+                        'raw_data' => array_filter([
+                            'account_number' => $contact['AccountNumber'] ?? null,
+                            'tax_number' => $contact['TaxNumber'] ?? null,
+                            'first_name' => $contact['FirstName'] ?? null,
+                            'last_name' => $contact['LastName'] ?? null,
+                        ], fn ($v) => filled($v)),
+                    ],
+                );
+                $count++;
+            }
+            $page++;
+        } while (count($contacts) >= XeroClient::PAGE_SIZE);
+
+        return $count;
+    }
+
+    /**
+     * @param  array<string, mixed>  $contact
+     */
+    protected function primaryPhone(array $contact): ?string
+    {
+        $phone = collect($contact['Phones'] ?? [])
+            ->first(fn ($p) => filled($p['PhoneNumber'] ?? null));
+
+        return $phone
+            ? trim(implode(' ', array_filter([$phone['PhoneCountryCode'] ?? null, $phone['PhoneAreaCode'] ?? null, $phone['PhoneNumber']])))
+            : null;
     }
 
     /**
@@ -112,24 +198,77 @@ class XeroDriver implements ImportSourceDriver
     public function mapInvoice(array $invoice): array
     {
         $status = (string) ($invoice['Status'] ?? '');
-        $lines = $invoice['LineItems'] ?? [];
+
+        return [
+            'external_id' => $invoice['InvoiceID'] ?? '',
+            'amount' => $invoice['SubTotal'] ?? 0,
+            'currency' => $invoice['CurrencyCode'] ?? null,
+            'transaction_date' => $this->xeroDate($invoice, 'Date'),
+            'is_paid' => $status === 'PAID',
+            'paid_at' => $status === 'PAID' ? $this->xeroDate($invoice, 'FullyPaidOnDate') : null,
+            'excluded' => $status === 'VOIDED',
+            'raw_data' => array_merge($this->commonRaw($invoice), [
+                'type' => 'invoice',
+                'invoice_number' => $invoice['InvoiceNumber'] ?? null,
+                'amount_due' => $invoice['AmountDue'] ?? null,
+                'due_date' => $this->xeroDate($invoice, 'DueDate'),
+            ]),
+        ];
+    }
+
+    /**
+     * A sales credit note as a negative transaction. It always counts (it is
+     * money the customer no longer owes), dated when it was raised; its
+     * unallocated remaining credit stands in for amount_due.
+     *
+     * @param  array<string, mixed>  $creditNote
+     * @return array<string, mixed>
+     */
+    public function mapCreditNote(array $creditNote): array
+    {
+        $status = (string) ($creditNote['Status'] ?? '');
+        $date = $this->xeroDate($creditNote, 'Date');
+
+        return [
+            'external_id' => $creditNote['CreditNoteID'] ?? '',
+            'amount' => -abs((float) ($creditNote['SubTotal'] ?? 0)),
+            'currency' => $creditNote['CurrencyCode'] ?? null,
+            'transaction_date' => $date,
+            'is_paid' => true,
+            'paid_at' => $this->xeroDate($creditNote, 'FullyPaidOnDate') ?? $date,
+            'excluded' => $status === 'VOIDED',
+            'raw_data' => array_merge($this->commonRaw($creditNote), [
+                'type' => 'credit_note',
+                'invoice_number' => $creditNote['CreditNoteNumber'] ?? null,
+                'amount_due' => $creditNote['RemainingCredit'] ?? null,
+            ]),
+        ];
+    }
+
+    /**
+     * Fields shared by invoices and credit notes: customer, reference, status,
+     * products, totals and every line-item tracking category (e.g. "Sales
+     * Rep" becomes sales_rep; the first option seen for each category wins).
+     *
+     * @param  array<string, mixed>  $record
+     * @return array<string, mixed>
+     */
+    protected function commonRaw(array $record): array
+    {
+        $lines = $record['LineItems'] ?? [];
         $itemCodes = collect($lines)->pluck('ItemCode')->filter()->unique()->values();
 
         $raw = [
-            'invoice_number' => $invoice['InvoiceNumber'] ?? null,
-            'reference' => $invoice['Reference'] ?? null,
-            'customer' => data_get($invoice, 'Contact.Name'),
-            'contact_id' => data_get($invoice, 'Contact.ContactID'),
-            'status' => $status,
+            'reference' => $record['Reference'] ?? null,
+            'customer' => data_get($record, 'Contact.Name'),
+            'contact_id' => data_get($record, 'Contact.ContactID'),
+            'status' => (string) ($record['Status'] ?? ''),
             'product' => $itemCodes->first() ?? data_get($lines, '0.Description'),
             'item_codes' => $itemCodes->implode(','),
-            'total' => $invoice['Total'] ?? null,
-            'total_tax' => $invoice['TotalTax'] ?? null,
-            'amount_due' => $invoice['AmountDue'] ?? null,
+            'total' => $record['Total'] ?? null,
+            'total_tax' => $record['TotalTax'] ?? null,
         ];
 
-        // Tracking categories (e.g. "Sales Rep", "Region") from the line items;
-        // the first option seen for each category wins.
         foreach ($lines as $line) {
             foreach ($line['Tracking'] ?? [] as $tracking) {
                 $key = Str::snake(Str::lower(trim((string) ($tracking['Name'] ?? ''))));
@@ -139,31 +278,27 @@ class XeroDriver implements ImportSourceDriver
             }
         }
 
-        return [
-            'external_id' => $invoice['InvoiceID'] ?? '',
-            'amount' => $invoice['SubTotal'] ?? 0,
-            'currency' => $invoice['CurrencyCode'] ?? null,
-            'transaction_date' => $this->invoiceDate($invoice),
-            'is_paid' => $status === 'PAID',
-            'excluded' => $status === 'VOIDED',
-            'raw_data' => $raw,
-        ];
+        return $raw;
     }
 
     /**
-     * Xero JSON dates come either as DateString ("2026-01-15T00:00:00") or in
-     * the legacy "/Date(1768435200000+0000)/" form.
+     * A Xero JSON date field, which comes either as "<Field>String"
+     * ("2026-01-15T00:00:00") or in the legacy "/Date(1768435200000+0000)/" form.
      *
-     * @param  array<string, mixed>  $invoice
+     * @param  array<string, mixed>  $record
      */
-    protected function invoiceDate(array $invoice): ?string
+    protected function xeroDate(array $record, string $field): ?string
     {
-        if (! empty($invoice['DateString'])) {
-            return substr((string) $invoice['DateString'], 0, 10);
+        if (! empty($record[$field.'String'])) {
+            return substr((string) $record[$field.'String'], 0, 10);
         }
 
-        if (preg_match('#/Date\((-?\d+)#', (string) ($invoice['Date'] ?? ''), $m)) {
+        if (preg_match('#/Date\((-?\d+)#', (string) ($record[$field] ?? ''), $m)) {
             return Carbon::createFromTimestampMs((int) $m[1], 'UTC')->toDateString();
+        }
+
+        if (is_string($record[$field] ?? null) && preg_match('/^\d{4}-\d{2}-\d{2}/', $record[$field])) {
+            return substr($record[$field], 0, 10);
         }
 
         return null;

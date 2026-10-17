@@ -3,6 +3,12 @@
         <x-ui.page-header title="My statement" subtitle="Your released credits and payouts">
             <x-slot name="actions">
                 <x-ui.button href="{{ route('my.statement') }}" variant="secondary">Download statement</x-ui.button>
+                <form method="GET" action="{{ route('statements.pdf', auth()->user()) }}" class="flex items-center gap-2">
+                    <label for="statement_month" class="sr-only">Statement month</label>
+                    <input id="statement_month" type="month" name="month" value="{{ now()->format('Y-m') }}" class="border-slate-300 rounded-lg shadow-sm text-sm py-1.5" />
+                    <x-ui.button variant="secondary">Download PDF</x-ui.button>
+                </form>
+                <x-ui.button href="{{ route('estimate.show') }}" variant="secondary">Estimate my commission</x-ui.button>
                 <x-ui.button href="{{ route('disputes.create') }}" variant="secondary">Raise a dispute</x-ui.button>
             </x-slot>
         </x-ui.page-header>

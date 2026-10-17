@@ -24,9 +24,8 @@ use Illuminate\Support\LazyCollection;
 class CalculationEngine
 {
     public function __construct(
-        protected TierCalculator $tierCalculator,
+        protected CommissionCalculator $commission,
         protected AliasCreditingStrategy $strategy,
-        protected FormulaEvaluator $formula,
         protected FxConverter $fx,
     ) {}
 
@@ -275,45 +274,21 @@ class CalculationEngine
      */
     protected function computeCommission(CalcRun $run, int $userId, array $snapshot, array $tiers, array $totals): array
     {
-        $plan = $snapshot['plan'];
-        $quota = isset($plan['quota']) ? (float) $plan['quota'] : null;
-        $attainmentPct = ($quota && $quota > 0) ? $totals['attainment'] / $quota : 0.0;
+        $result = $this->commission->calculate($snapshot['plan'], $tiers, $totals);
+        $meta = $result['meta'];
+        $total = $result['uncapped'];
 
-        $meta = [
-            'attainment' => $totals['attainment'],
-            'quota' => $quota,
-            'attainment_pct' => round($attainmentPct, 6),
-        ];
-
-        $formula = $plan['commission_formula'] ?? null;
-
-        if (! empty($formula)) {
-            $total = $this->formula->evaluate($formula, [
-                'attainment' => $totals['attainment'],
-                'revenue' => $totals['revenue'],
-                'profit' => $totals['profit'],
-                'quota' => $quota ?? 0.0,
-                'attainment_pct' => $attainmentPct,
-                'rate' => 0.0,
-            ]);
-            $meta['method'] = 'formula';
-            $meta['formula'] = $formula;
+        if ($meta['method'] === 'formula') {
             $this->log($run, 'formula_applied', null, $userId, 0.0, $total,
                 "Custom formula on attainment {$totals['attainment']}.", $meta);
-        } else {
-            $result = $this->tierCalculator->commission($tiers, $totals['attainment']);
-            $total = $result['total'];
-            $meta['method'] = 'tiers';
-            $meta['breakdown'] = $result['breakdown'];
-            if ($total != 0.0) {
-                $this->log($run, 'tier_applied', null, $userId, 0.0, $total,
-                    'Tiered commission on attainment '.round($totals['attainment'], 2).'.', $meta);
-            }
+        } elseif ($total != 0.0) {
+            $this->log($run, 'tier_applied', null, $userId, 0.0, $total,
+                'Tiered commission on attainment '.round($totals['attainment'], 2).'.', $meta);
         }
 
         // Payout cap.
-        $cap = isset($plan['payout_cap']) ? (float) $plan['payout_cap'] : null;
-        if ($cap !== null && $total > $cap) {
+        $cap = $result['cap'];
+        if ($result['capped']) {
             $this->log($run, 'cap_applied', null, $userId, $total, $cap,
                 "Payout capped at {$cap}.", ['uncapped' => $total, 'cap' => $cap]);
             $meta['uncapped'] = round($total, 4);
@@ -565,7 +540,8 @@ class CalculationEngine
 
     /**
      * Transactions in scope for this run: within the plan period when the
-     * snapshot defines one, otherwise all workspace transactions.
+     * snapshot defines one (by paid date for pay-when-paid plans), otherwise
+     * all workspace transactions.
      *
      * @return LazyCollection<int, Transaction>
      */
@@ -592,8 +568,19 @@ class CalculationEngine
         }
 
         if ($start && $end) {
-            $query->whereNotNull('transaction_date')
-                ->whereBetween('transaction_date', [$start, $end]);
+            if (! empty($snapshot['plan']['pay_when_paid'])) {
+                // Pay-when-paid: a deal belongs to the period its cash arrived
+                // (paid_at, e.g. Xero FullyPaidOnDate), falling back to the
+                // transaction date when the source doesn't report one.
+                $query->where(fn ($q) => $q
+                    ->whereBetween('paid_at', [$start, $end])
+                    ->orWhere(fn ($q) => $q->whereNull('paid_at')
+                        ->whereNotNull('transaction_date')
+                        ->whereBetween('transaction_date', [$start, $end])));
+            } else {
+                $query->whereNotNull('transaction_date')
+                    ->whereBetween('transaction_date', [$start, $end]);
+            }
         }
 
         // Per-plan transaction filter on a raw_data field (best-effort JSON match).

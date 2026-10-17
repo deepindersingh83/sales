@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\ImportSource;
 use App\Models\Transaction;
+use App\Services\ActivityLogger;
 use App\Services\Connectors\Xero\XeroClient;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -84,6 +85,7 @@ class XeroConnectionController extends Controller
         }
 
         $names = collect($tenants)->pluck('tenantName')->implode(', ');
+        app(ActivityLogger::class)->log('xero.connected', "Connected to Xero ({$names}).");
 
         return redirect()->route('admin.connectors.xero.show')
             ->with('status', "Connected to Xero ({$names}). Invoices sync daily — use “Sync now” for the first import.");

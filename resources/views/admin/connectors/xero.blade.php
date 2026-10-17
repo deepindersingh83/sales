@@ -63,6 +63,9 @@
                     @if ($source->last_error)
                         <p class="text-xs text-rose-600">Last sync failed: {{ $source->last_error }}</p>
                     @endif
+                    @if (! empty($config['contacts_error']))
+                        <p class="text-xs text-amber-700">Customer contacts could not be synced: {{ $config['contacts_error'] }} (invoices still sync; check the app has the contacts scope).</p>
+                    @endif
                     @if (($config['last_check_ok'] ?? true) === false)
                         <p class="text-xs text-rose-600">Last check: {{ $config['last_check_message'] ?? 'failed' }}</p>
                     @endif
@@ -77,6 +80,11 @@
                                 <form method="POST" action="{{ route('admin.import-sources.run', $source) }}">
                                     @csrf
                                     <x-ui.button variant="secondary">Sync now</x-ui.button>
+                                </form>
+                                <form method="POST" action="{{ route('admin.connectors.xero.resync', $source) }}"
+                                      onsubmit="return confirm('Re-import all invoices, credit notes and contacts from Xero? This can take a while for large organisations.')">
+                                    @csrf
+                                    <x-ui.button variant="ghost" title="Re-import everything, not just changes">Full resync</x-ui.button>
                                 </form>
                             @endif
                             <form method="POST" action="{{ route('admin.connectors.xero.update', $source) }}" class="flex items-center gap-2">

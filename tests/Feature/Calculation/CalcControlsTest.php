@@ -58,6 +58,36 @@ class CalcControlsTest extends TestCase
         $this->assertEqualsWithDelta(2000.0, (float) Credit::where('calc_run_id', $run->id)->sum('credited_amount'), 0.01);
     }
 
+    public function test_pay_when_paid_counts_a_deal_in_the_period_its_cash_arrived(): void
+    {
+        $ws = Workspace::factory()->create();
+        [$plan] = $this->base($ws, ['pay_when_paid' => true, 'start_date' => '2026-09-01', 'end_date' => '2026-09-30']);
+        $deal = fn (string $id, string $invoiced, ?string $paid) => Transaction::create(['workspace_id' => $ws->id, 'external_id' => $id,
+            'source_system' => 'xero', 'amount' => 1000, 'currency' => 'USD', 'is_paid' => true, 'transaction_date' => $invoiced,
+            'paid_at' => $paid, 'raw_data' => ['rep' => 'Alice']]);
+
+        $deal('AUG-INVOICED-SEP-PAID', '2026-08-20', '2026-09-05');  // counts in September
+        $deal('SEP-INVOICED-OCT-PAID', '2026-09-10', '2026-10-02');  // belongs to October
+        $deal('SEP-NO-PAID-DATE', '2026-09-15', null);               // falls back to invoice date
+
+        $run = app(StartCalcRun::class)->handle($plan);
+
+        $credited = Credit::where('calc_run_id', $run->id)->with('transaction')->get()->pluck('transaction.external_id')->sort()->values()->all();
+        $this->assertSame(['AUG-INVOICED-SEP-PAID', 'SEP-NO-PAID-DATE'], $credited);
+    }
+
+    public function test_plans_without_pay_when_paid_still_use_the_invoice_date(): void
+    {
+        $ws = Workspace::factory()->create();
+        [$plan] = $this->base($ws, ['start_date' => '2026-09-01', 'end_date' => '2026-09-30']);
+        Transaction::create(['workspace_id' => $ws->id, 'external_id' => 'AUG', 'source_system' => 'xero', 'amount' => 1000,
+            'currency' => 'USD', 'is_paid' => true, 'transaction_date' => '2026-08-20', 'paid_at' => '2026-09-05', 'raw_data' => ['rep' => 'Alice']]);
+
+        $run = app(StartCalcRun::class)->handle($plan);
+
+        $this->assertSame(0, Credit::where('calc_run_id', $run->id)->count());
+    }
+
     public function test_release_blocked_until_run_approved(): void
     {
         $ws = Workspace::factory()->create();

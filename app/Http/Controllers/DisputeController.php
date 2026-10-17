@@ -6,6 +6,7 @@ use App\Enums\DisputeStatus;
 use App\Models\Credit;
 use App\Models\Dispute;
 use App\Models\Transaction;
+use App\Services\ActivityLogger;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -124,7 +125,7 @@ class DisputeController extends Controller
         return redirect()->route('disputes.show', $dispute)->with('status', 'Comment added.');
     }
 
-    public function resolve(Request $request, Dispute $dispute): RedirectResponse
+    public function resolve(Request $request, Dispute $dispute, ActivityLogger $logger): RedirectResponse
     {
         Gate::authorize('resolve', $dispute);
 
@@ -135,6 +136,10 @@ class DisputeController extends Controller
             'resolution_notes' => $data['resolution_notes'] ?? null,
             'resolved_by_user_id' => $request->user()->id,
             'resolved_at' => now(),
+        ]);
+
+        $logger->log('dispute.resolved', "Resolved dispute #{$dispute->id}.", $dispute, [
+            'raised_by' => $dispute->user_id,
         ]);
 
         return redirect()->route('disputes.show', $dispute)->with('status', 'Dispute resolved.');
